@@ -13,7 +13,7 @@ device_id=$1
 
 init_lr=0.0005
 batch_size=32
-seq_len=70
+seq_len=165
 feat_dim=39
 hidden_dim=256
 enc_num_layers=2
@@ -60,4 +60,4 @@ python3 $path/main.py --init_lr=$init_lr --batch_size=$batch_size --seq_len=$seq
   --iter_d=$iter_d --n_epochs=$n_epochs \
   $train_meta_pkl $train_mfcc_pkl $train_phn_pkl $train_wrd_pkl $train_slb_pkl \
   $test_meta_pkl $test_mfcc_pkl $test_phn_pkl $test_wrd_pkl $test_slb_pkl \
-  $log_dir $model_dir $result_dir $mode None
+  $log_dir $model_dir $result_dir $mode -1

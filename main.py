@@ -112,7 +112,7 @@ def add_parser():
         metavar='<result directory>')
     parser.add_argument('mode', 
         metavar='<mode (train or eval)>')    
-    parser.add_argument('num_paired', 
+    parser.add_argument('num_paired', type=int, default=-1,
         metavar='<number of paired data>')    
 
     return parser

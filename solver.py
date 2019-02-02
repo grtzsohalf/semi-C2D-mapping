@@ -46,7 +46,7 @@ class Solver:
 
         # self.mode = mode
         if self.mode == 'train':
-            self.logger = Logger(os.path.join(log_dir, 'loss_'+loss_type))
+            self.logger = Logger(os.path.join(log_dir))
 
         self.model = None
 
@@ -110,7 +110,7 @@ class Solver:
         discriminator = Discriminator(2*self.hidden_dim*2, self.hidden_dim*2, self.D_num_layers)
 
         # the whole model
-        self.model = Model(a2v, t2v, discriminator) 
+        self.model = Model(a2v, t2v, discriminator, self.mode) 
 
         self.model.to(device)
         # print (next(self.model.parameters()).is_cuda)
@@ -126,28 +126,32 @@ class Solver:
         else:
             self.model.eval()
 
-        total_loss = 0  # Reset every print_every
-        r_loss = 0  # Reset every print_every
-        cpc_loss = 0  # Reset every print_every
+        total_G_losses = 0
+        total_D_losses = 0
+        total_r_loss = 0
+        total_g_loss = 0
+        total_pos_spk_loss = 0
+        total_neg_spk_loss = 0
+        total_paired_loss = 0
+        total_d_loss = 0
+        total_gp_loss = 0
 
-        # Distance container for Evaluation
-        distStack0   = []
-        distStack1   = []
-        batchLenStack = []
-
-        total_indices = np.arange(data.n_utts)
+        total_indices = np.arange(data.n_wrds)
         if mode == 'train':
             np.random.shuffle(total_indices)
+            total_indices_paired = np.arange(data.num_paired)
 
         for i in tqdm(range(data.n_batches)):
             indices = total_indices[i*self.batch_size:(i+1)*self.batch_size]
             batch_size = len(indices)
+            if mode == 'train':
+                indices_paired = np.random.choice(total_indices_paired, batch_size, False)
+            else:
+                indices_paired = None
 
-            hidden = self.model.encoder.init_hidden(batch_size)
-            hidden = repackage_hidden(hidden)
-
-            batch_target, batch_length, neg_shift = data.get_batch_data(indices, self.pred_step, self.pred_neg_num)
-            # print (batch_target.device, batch_length.device, neg_shift.device)
+            batch_data, batch_length, batch_order, \
+                batch_txt, batch_txt_length, batch_txt_order \
+                = data.get_batch_data(indices, indices_paired)
 
             if mode == 'train':
                 optimizer.zero_grad()
@@ -157,11 +161,15 @@ class Solver:
                 for p in self.model.discriminator.parameters(): # reset requires_grad
                     p.requires_grad = True # set to False below in G update
 
-                for iter in self.iter_d:
+                for _ in self.iter_d:
                     self.model.discriminator.zero_grad()
 
-                    losses (d_loss, GP_loss) = 
-                    losses.backward()
+                    phn_hiddens, spk_hiddens, txt_hiddens, r_loss, g_loss, d_loss, \
+                        gp_loss, pos_spk_loss, neg_spk_loss, paired_loss \
+                        = self.model(batch_size, batch_data, batch_length, batch_order, 
+                                     batch_txt, batch_txt_length, batch_txt_order, 'train')
+                    D_losses = d_loss + 10 * gp_loss
+                    D_losses.backward()
                     optimizer_D.step()
 
                 ################
@@ -170,52 +178,45 @@ class Solver:
                 for p in self.model.discriminator.parameters():
                     p.requires_grad = False # to avoid computation
                 
-                self.model.phn_encoder.zero_grad()
-                self.model.spk_encoder.zero_grad()
-                self.model.decoder.zero_grad()
+                self.model.a2v.zero_grad()
+                self.model.t2v.zero_grad()
 
-                losses (g_loss, r_loss, pos_spk_loss, neg_spk_loss) = 
-                losses.backward()
+                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, g_loss, d_loss, \
+                        gp_loss, pos_spk_loss, neg_spk_loss, paired_loss \
+                        = self.model(batch_size, batch_data, batch_length, batch_order, 
+                                     batch_txt, batch_txt_length, batch_txt_order, 'train') 
+                G_losses = r_loss + g_loss + pos_spk_loss + neg_spk_loss + paired_loss
+                G_losses.backward()
                 optimizer_G.step()
-
-
-            target_outputs, hidden, rnn_hs, dropped_rnn_hs, distances, reconstruction_loss \
-                = self.model(batch_target, batch_length, neg_shift, hidden, self.loss_type)
-            loss = reconstruction_loss + 
+            else:
+                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, g_loss, d_loss, \
+                        gp_loss, pos_spk_loss, neg_spk_loss, paired_loss \
+                        = self.model(batch_size, batch_data, batch_length, batch_order, 
+                                     batch_txt, batch_txt_length, batch_txt_order, 'test') 
+                D_losses = d_loss + 10 * gp_loss
+                G_losses = r_loss + g_loss + pos_spk_loss + neg_spk_loss + paired_loss
 
             if mode == 'test' and result_dir:
-                write_pkl([target_outputs.cpu().detach().numpy(), 
-                           distances[0].cpu().detach().numpy(), 
-                           distances[1].cpu().detach().numpy()], 
+                write_pkl([phn_hiddens.cpu().detach().numpy(), 
+                           spk_hiddens.cpu().detach().numpy(), 
+                           txt_hiddens.cpu().detach().numpy()], 
                           os.path.join(result_dir, 'result.pkl'))
 
-            if mode == 'evaluate' and result_dir:
-                write_pkl([target_outputs.cpu().detach().numpy(), 
-                           distances[0].cpu().detach().numpy(), 
-                           distances[1].cpu().detach().numpy()], 
-                          os.path.join(result_dir, 'result.pkl'))
-                distStack0.append(distances[0])
-                distStack1.append(distances[1])
-                batchLenStack.append(batch_length)
-                #print(batch_length)
+            total_G_losses += G_losses.item()
+            total_D_losses += D_losses.item()
+            total_r_loss += r_loss.item()
+            total_g_loss += g_loss.item()
+            total_pos_spk_loss += pos_spk_loss.item()
+            total_neg_spk_loss += neg_spk_loss.item()
+            total_paired_loss += paired_loss.item()
+            total_d_loss += d_loss.item()
+            total_gp_loss += gp_loss.item()
 
+            # del loss, target_output
 
-            # Activiation Regularization
-            loss = loss + sum(
-                self.AR_scale * dropped_rnn_h.pow(2).mean()
-                for dropped_rnn_h in dropped_rnn_hs[-1:]
-            )
-
-            total_loss += loss.item()
-            r_loss += reconstruction_loss.item()
-
-            # del loss, target_outputs, hidden, rnn_hs, dropped_rnn_hs, distances, reconstruction_loss, CPC_loss
-
-        # return distances for test (Evaluation)
-        if mode == 'evaluate' and result_dir:
-            return total_loss/data.n_batches, r_loss/data.n_batches, cpc_loss/data.n_batches, (distStack0, distStack1), batchLenStack
-
-        return total_loss/data.n_batches, r_loss/data.n_batches, 
+        return total_G_losses/data.n_batches, total_D_losses/data.n_batches, total_r_loss/data.n_batches, \
+            total_g_loss/data.n_batches, total_pos_spk_loss/data.n_batches, total_neg_spk_loss/data.n_batches, \
+            total_paired_loss/data.n_batches, total_d_loss/data.n_batches, total_gp_loss/data.n_batches
 
 
     ######################################################################
@@ -226,40 +227,57 @@ class Solver:
     def train_iters(self, train_data, eval_data, saver, n_epochs, global_step, print_every=1):
         # optimizer = optim.Adam(self.model.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
         optimizer_D = optim.Adam(self.model.discriminator.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
-        optimizer_G = optim.Adam([self.model.phn_encoder.parameters(), self.model.spk_encoder.parameters(),
-                                  self.model.decoder.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
+        optimizer_G = optim.Adam([self.model.a2v.parameters(), self.model.t2v.parameters(),
+                                  lr=self.init_lr, betas=(0.5, 0.9))
 
         for epoch in range(global_step+1, global_step+1+n_epochs):
             print ('Epoch: ', epoch)
-
             # Train
-            train_total_loss, train_r_loss, train_cpc_loss = self.compute(train_data, 'train', 
-                                                                          optimizer_D=optimizer_D, optimizer_G = optimizer_G)
+            train_G_losses, train_D_losses, train_r_loss, train_g_loss, train_pos_spk_loss, train_neg_spk_loss, 
+                                  train_paired_loss, train_d_loss, train_gp_loss \
+                                  = self.compute(train_data, 'train', optimizer_D=optimizer_D, optimizer_G=optimizer_G)
         
-            self.logger.scalar_summary('train_losses/total_loss', train_total_loss, epoch)
+            self.logger.scalar_summary('train_losses/G_losses', train_G_losses, epoch)
+            self.logger.scalar_summary('train_losses/D_losses', train_D_losses, epoch)
             self.logger.scalar_summary('train_losses/r_loss', train_r_loss, epoch)
-            self.logger.scalar_summary('train_losses/cpc_loss', train_cpc_loss, epoch)
-            #with open(self.log_train_file, 'a') as fo:
-            #    fo.write(str(epoch)+' '+str(train_total_loss)+' '+str(train_r_loss)+' '+str(train_cpc_loss)+'\n')
+            self.logger.scalar_summary('train_losses/g_loss', train_g_loss, epoch)
+            self.logger.scalar_summary('train_losses/pos_spk_loss', train_pos_spk_loss, epoch)
+            self.logger.scalar_summary('train_losses/neg_spk_loss', train_neg_spk_loss, epoch)
+            self.logger.scalar_summary('train_losses/paired_loss', train_paired_loss, epoch)
+            self.logger.scalar_summary('train_losses/d_loss', train_d_loss, epoch)
+            self.logger.scalar_summary('train_losses/gp_loss', train_gp_loss, epoch)
 
-            print ('Train -----> total_loss: ',train_total_loss,' r_loss: ',train_r_loss,' cpc_loss: ',train_cpc_loss)
+            print ('Train -----> G_losses: ',train_G_losses, ' D_losses: ', train_D_losses, 
+                   '\nr_loss: ', train_r_loss, ' g_loss: ',train_g_loss, ' pos_spk_loss: ', train_pos_spk_loss, 
+                   ' neg_spk_loss: ', train_neg_spk_loss, ' paired_loss: ', train_paired_loss,
+                   '\nd_loss: ', train_d_loss, ' gp_loss: ', train_gp_loss)
 
             # Evaluate
-            test_total_loss, test_r_loss, test_cpc_loss = self.compute(eval_data, 'test')
+            eval_G_losses, eval_D_losses, eval_r_loss, eval_g_loss, eval_pos_spk_loss, eval_neg_spk_loss, 
+                                  eval_paired_loss, eval_d_loss, eval_gp_loss \
+                                  = self.compute(eval_data, 'test')
         
-            self.logger.scalar_summary('test_losses/total_loss', test_total_loss, epoch)
-            self.logger.scalar_summary('test_losses/r_loss', test_r_loss, epoch)
-            self.logger.scalar_summary('test_losses/cpc_loss', test_cpc_loss, epoch)
-            #with open(self.log_test_file, 'a') as fo:
-            #    fo.write(str(epoch)+' '+str(test_total_loss)+' '+str(test_r_loss)+' '+str(test_cpc_loss)+'\n')
+            self.logger.scalar_summary('eval_losses/G_losses', eval_G_losses, epoch)
+            self.logger.scalar_summary('eval_losses/D_losses', eval_D_losses, epoch)
+            self.logger.scalar_summary('eval_losses/r_loss', eval_r_loss, epoch)
+            self.logger.scalar_summary('eval_losses/g_loss', eval_g_loss, epoch)
+            self.logger.scalar_summary('eval_losses/pos_spk_loss', eval_pos_spk_loss, epoch)
+            self.logger.scalar_summary('eval_losses/neg_spk_loss', eval_neg_spk_loss, epoch)
+            self.logger.scalar_summary('eval_losses/paired_loss', eval_paired_loss, epoch)
+            self.logger.scalar_summary('eval_losses/d_loss', eval_d_loss, epoch)
+            self.logger.scalar_summary('eval_losses/gp_loss', eval_gp_loss, epoch)
 
-            print ('Eval -----> total_loss: ',test_total_loss,' r_loss: ', test_r_loss,' cpc_loss: ',test_cpc_loss,'\n')
+            print ('Eval -----> G_losses: ',eval_G_losses, ' D_losses: ', eval_D_losses, 
+                   '\nr_loss: ', eval_r_loss, ' g_loss: ',eval_g_loss, ' pos_spk_loss: ', eval_pos_spk_loss, 
+                   ' neg_spk_loss: ', eval_neg_spk_loss, ' paired_loss: ', eval_paired_loss,
+                   '\nd_loss: ', eval_d_loss, ' gp_loss: ', eval_gp_loss)
 
             # Save model
             state = {
                 'epoch': epoch,
                 'state_dict': self.model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
+                'optimizer_G_state_dict': optimizer_G.state_dict(),
+                'optimizer_D_state_dict': optimizer_D.state_dict()
             }
             name = 'epoch_'+str(epoch)
             saver.save(state, name)
@@ -270,67 +288,12 @@ class Solver:
     # ----------------------------
     #
 
-    def evaluate(self, eval_data, result_dir, th, criteria_idxs, tolerance_window=2, eval_mode='phn', print_every=1):
-        test_total_loss, test_r_loss, test_cpc_loss, test_distances, test_batch_lens = self.compute(eval_data, 'evaluate', result_dir=result_dir)
-        print ('Eval -----> total_loss: ',test_total_loss,' r_loss: ',test_r_loss,' cpc_loss: ',test_cpc_loss,'\n')
+    def evaluate(self, test_data, result_dir, print_every=1):
+        eval_G_losses, eval_D_losses, eval_r_loss, eval_g_loss, eval_pos_spk_loss, eval_neg_spk_loss, 
+                              eval_paired_loss, eval_d_loss, eval_gp_loss \
+                              = self.compute(eval_data, 'test', result_dir=result_dir)
 
-        # test_distances[0]: cforgetgate, [layer#, max seq_len, batch_size, hidden_size]
-        # test_distances[1]: cingate, [layer#, max seq_len, batch_size, hidden_size]
-        
-        output_msg = ''
-        recall_list = [ [ [] for i in range(len(th)) ] for i in range(len(criteria_idxs)) ]
-        precision_list = [ [ [] for i in range(len(th)) ] for i in range(len(criteria_idxs)) ]
-        
-        for i in range(len(th)):
-            recall_list.append([])
-            precision_list.append([])
-
-        if eval_mode == 'phn':
-            meta_data = eval_data.phn_meta
-        elif eval_mode == 'slb':
-            meta_data = eval_data.slb_meta
-        elif eval_mode == 'wrd':
-            meta_data = eval_data.wrd_meta
-        else:
-            print("eval_mode should be phn|slb|wrd")
-            exit()
-
-        for i in range(eval_data.n_utts):
-            utt_len = test_batch_lens[i // self.batch_size][i%self.batch_size]
-            scores0 = test_distances[0][i // self.batch_size][:,:utt_len,i%self.batch_size,:] # (num_layers, length, batch_size, hidden_size)
-            scores0 = scores0.cpu().detach().numpy()
-            
-            bounds_list = [[ info[2]-meta_data[i][0][2] for info in meta_data[i] ]]
-            for c_idx, c_v in enumerate(criteria_idxs):
-                for th_idx, t_f in enumerate(th):
-                    batch_recall_list, batch_precision_list = \
-                        thresh_dist_segment_eval(scores0, bounds_list, c_v, tolerance_window, t_f)
-                    
-                    if th_idx == 5:
-                        print_progress(i+1, eval_data.n_utts, \
-                                        batch_precision_list[0], \
-                                        batch_recall_list[0], output_msg)
-
-                    precision_list[c_idx][th_idx] += batch_precision_list
-                    recall_list[c_idx][th_idx] += batch_recall_list
-
-        r_val_list = []
-        for c_idx, c_v in enumerate(criteria_idxs):
-            for t_idx, t in enumerate(th):
-                precision = sum(precision_list[c_idx][t_idx]) / len(precision_list[c_idx][t_idx])
-                recall = sum(recall_list[c_idx][t_idx]) / len(recall_list[c_idx][t_idx])
-                recall *= 100
-                precision *= 100
-                if recall == 0. or precision == 0.:
-                    f_score = -1.
-                    r_val = -1.
-                else:
-                    f_score = (2 * precision * recall) / (precision + recall)
-                    r_val = r_val_eval(precision, recall)
-                r_val_list.append(r_val)
-                print('{:d} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}'. \
-                    format(c_v, t, precision, recall, f_score, r_val))
-        
-        print('')
-        print('The best r_val is: {:.4f}'.format(max(r_val_list)))
-    
+        print ('Eval -----> G_losses: ',eval_G_losses, ' D_losses: ', eval_D_losses, 
+               '\nr_loss: ', eval_r_loss, ' g_loss: ',eval_g_loss, ' pos_spk_loss: ', eval_pos_spk_loss, 
+               ' neg_spk_loss: ', eval_neg_spk_loss, ' paired_loss: ', eval_paired_loss,
+               '\nd_loss: ', eval_d_loss, ' gp_loss: ', eval_gp_loss)

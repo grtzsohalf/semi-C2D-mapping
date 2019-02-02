@@ -90,7 +90,7 @@ class Model(nn.Module):
             paired_loss = self.compute_reconstruction_loss(paired_phn_hiddens, txt_paired_hiddens)
         else:
             paired_loss = self.compute_reconstruction_loss(target_phn_hiddens, txt_hiddens)
-        return target_phn_hiddens, target_spk_hiddens, reconstruction_loss, generation_loss, discrimination_loss, \
+        return target_phn_hiddens, target_spk_hiddens, txt_hiddens, reconstruction_loss, generation_loss, discrimination_loss, \
             GP_loss, pos_speaker_loss, neg_speaker_loss, paired_loss
 
 

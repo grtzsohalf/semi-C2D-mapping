@@ -31,7 +31,7 @@ class Speech:
     def __init__(self, name, batch_size, num_paired):
         self.name = name
         self.batch_size = batch_size
-        self.num_paired
+        self.num_paired = num_paired
 
         self.n_utts = 0
         self.n_batches = 0
@@ -141,6 +141,9 @@ class Speech:
             # Process each wrd in utt
             wrd_meta_utt = []
             for j, (wrd, wrd_start, wrd_end) in enumerate(wrd_utt):
+                if wrd_end - wrd_start == 0:
+                    print (i, wrd)
+                    continue
                 self.n_total_wrds += 1
                 if not wrd in self.wrd2idx:
                     self.wrd2idx[wrd] = self.n_wrds
