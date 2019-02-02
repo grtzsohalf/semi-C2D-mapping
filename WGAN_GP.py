@@ -25,6 +25,7 @@ USE_CUDA = True
 class Generator(nn.Module):
 
     def __init__(self, ):
+        self.null = None
 
     def forward(self, inputs):
         return 
@@ -47,8 +48,8 @@ class FCDiscriminator(nn.Module):
         - **output** (batch_size): real number indicating reality
     """
 
-    def __init__(self):
-        super(FCDiscriminator, self).__init__(input_size, hidden_size, n_layers)
+    def __init__(self, input_size, hidden_size, n_layers):
+        super(FCDiscriminator, self).__init__()
 
         self.fc_tensor = self._makeFcSequential(input_size, hidden_size, n_layers)
         self.fc_tensor.apply(weight_init)
@@ -59,7 +60,7 @@ class FCDiscriminator(nn.Module):
             fc_list.append(nn.Linear(input_size, hidden_size))
             fc_list.append(nn.LeakyReLU())
         fc_list.append(nn.Linear(hidden_size, 1))
-        return nn.Sequential(*self.fc_list)
+        return nn.Sequential(*fc_list)
 
     def forward(self, inputs):
         return self.fc_tensor(inputs)

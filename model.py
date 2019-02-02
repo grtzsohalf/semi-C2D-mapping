@@ -81,7 +81,10 @@ class Model(nn.Module):
 
         feats = feats[orders]
         txt_feats = txt_feats[txt_orders]
-        reconstruction_loss = self.compute_reconstruction_loss(reconstructed, txt_reconstructed, lengths) 
+        lengths = lengths[orders]
+        txt_lengths = txt_lengths[txt_orders]
+        reconstruction_loss = self.compute_reconstruction_loss(reconstructed, feats, lengths) 
+        txt__loss = self.compute__loss(txt_reconstructed, txt_feats, txt_lengths) 
         generation_loss, discrimination_loss, GP_loss \
             = self.compute_GAN_losses(target_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens)
         pos_speaker_loss, neg_speaker_loss = \
@@ -127,7 +130,7 @@ class A2VwD(nn.Module):
             neg_phn_hiddens = phn_hiddens[batch_size*2:, :, :]
 
         # split spk_hiddens
-        _, spk_hiddens = self.spk_encoder(feats, lengths)
+        _, spk_hiddens = self.spk_encoder(emb_feats, lengths)
         spk_hiddens = spk_hiddens[-2:, :, :].transpose(0, 1)
         spk_hiddens = spk_hiddens[orders]
         target_spk_hiddens = spk_hiddens[:batch_size, :, :]
@@ -140,14 +143,14 @@ class A2VwD(nn.Module):
             neg_spk_hiddens = spk_hiddens[batch_size*2:, :, :]
 
         # construct decoder hiddens
-        target_concat_hiddens = torch.cat((target_phn_hiddens, target_spk_hiddens), -1)
+        target_concat_hiddens = torch.cat((target_phn_hiddens, target_spk_hiddens), -1).transpose(0, 1)
         state_zeros = torch.zeros_like(target_concat_hiddens, device=device) 
         decoder_init_state = torch.tensor(target_concat_hiddens, device=device)
-        for i in range(len(self.decoder_num_layers)-1):
-            decoder_init_state = torch.cat((decoder_init_state, state_zeros))
+        for i in range(self.decoder_num_layers-1):
+            decoder_init_state = torch.cat((decoder_init_state, state_zeros), 0)
 
         # decoder
-        begin_zeros = torch.zeros_like(feats[:batch_size, :, :]) 
+        begin_zeros = torch.zeros_like(emb_feats[:batch_size, :, :]) 
         reconstructed, _, _ = self.decoder(inputs=begin_zeros, encoder_hidden=decoder_init_state, teacher_forcing_ratio=1.)
         # [seq_len, batch_size, hidden_dim] -> [batch_size, seq_len, hidden_dim]
         reconstructed = torch.stack(reconstructed).transpose(0, 1)
@@ -187,10 +190,10 @@ class A2V(nn.Module):
             paired_hiddens = hiddens[batch_size:, :, :]
 
         # construct decoder hiddens
-        state_zeros = torch.zeros_like(target_hiddens, device=device) 
-        decoder_init_state = torch.tensor(target_hiddens, device=device)
+        state_zeros = torch.zeros_like(target_hiddens.transpose(0, 1), device=device) 
+        decoder_init_state = torch.tensor(target_hiddens.transpose(0, 1), device=device)
         for i in range(len(self.decoder_num_layers)-1):
-            decoder_init_state = torch.cat((decoder_init_state, state_zeros))
+            decoder_init_state = torch.cat((decoder_init_state, state_zeros), 0)
 
         # decoder
         begin_zeros = torch.zeros_like(feats[:batch_size, :, :]) 

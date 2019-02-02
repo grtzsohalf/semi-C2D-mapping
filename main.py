@@ -9,7 +9,7 @@ Semi-Continuous-to-discrete Domain Mapping (semi-C2D-mapping)
 import os
 import sys
 import argparse
-from solver_ONLSTM import Solver
+from solver import Solver
 from process_data import Speech
 from saver import PytorchSaver 
 
@@ -149,7 +149,8 @@ if __name__ == '__main__':
     #
 
     solver = Solver(FLAG.init_lr, FLAG.batch_size, FLAG.seq_len, FLAG.feat_dim, FLAG.p_hidden_dim,
-                    FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.D_num_layers, FLAG.dropout_rate, FLAG.iter_d, FLAG.log_dir)
+                    FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.D_num_layers, FLAG.dropout_rate, 
+                    FLAG.iter_d, FLAG.log_dir, FLAG.mode)
     solver.build_model()
     print ("Solver constructed!")
 
@@ -158,7 +159,7 @@ if __name__ == '__main__':
     # Check if checkpoints exist
     #
 
-    save_dir = os.path.join(FLAG.model_dir, 'save_'+FLAG.loss)
+    save_dir = os.path.join(FLAG.model_dir)
     # resume_dir = os.path.join(FLAG.model_dir, 'resume')
     if FLAG.mode == 'train':
         saver = PytorchSaver(100, save_dir)

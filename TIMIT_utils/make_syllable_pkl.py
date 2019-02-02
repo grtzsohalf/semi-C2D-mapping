@@ -40,22 +40,16 @@ def dump_pkl(data, file_name):
 
 def make_phn_in_wrd(phn_data, wrd_data):
     phn_in_wrd_data = []
-    for wrd_utt, phn_utt in zip(wrd_data, phn_data):
-        it = iter(wrd_utt)
-        wrd_tuple = next(it)
-
+    for i, (wrd_utt, phn_utt) in enumerate(zip(wrd_data, phn_data)):
         phn_in_wrd_utt = []
-        phn_in_wrd = []
+        for _ in range(len(wrd_utt)):
+            phn_in_wrd_utt.append([])
         for phn_tuple in phn_utt:
-            if phn_tuple[2] > wrd_tuple[2]:
-                phn_in_wrd_utt.append(phn_in_wrd)
-                try:
-                    wrd_tuple = next(it)
-                    phn_in_wrd = []
-                except:
-                    break
-            if phn_tuple[1] >= wrd_tuple[1]:
-                phn_in_wrd.append(phn_tuple)
+            if phn_tuple[0] == 'h#':
+                continue
+            for j, wrd_tuple in enumerate(wrd_utt):
+                if phn_tuple[1] >= wrd_tuple[1] and phn_tuple[2] <= wrd_tuple[2]:
+                    phn_in_wrd_utt[j].append(phn_tuple)
         phn_in_wrd_data.append(phn_in_wrd_utt)
 
     return phn_in_wrd_data

@@ -71,31 +71,25 @@ class Speech:
     # The full process for preparing the data.
     #
 
-    def make_phn_in_wrd(phn_data, wrd_data):
+    def make_phn_in_wrd(self, phn_data, wrd_data):
         phn_in_wrd_data = []
-        for wrd_utt, phn_utt in zip(wrd_data, phn_data):
-            it = iter(wrd_utt)
-            wrd_tuple = next(it)
-
+        for i, (wrd_utt, phn_utt) in enumerate(zip(wrd_data, phn_data)):
             phn_in_wrd_utt = []
-            phn_in_wrd = []
+            for _ in range(len(wrd_utt)):
+                phn_in_wrd_utt.append([])
             for phn_tuple in phn_utt:
-                if phn_tuple[2] > wrd_tuple[2]:
-                    phn_in_wrd_utt.append(phn_in_wrd)
-                    try:
-                        wrd_tuple = next(it)
-                        phn_in_wrd = []
-                    except:
-                        break
-                if phn_tuple[1] >= wrd_tuple[1]:
-                    phn_in_wrd.append(phn_tuple[0])
+                if phn_tuple[0] == 'h#':
+                    continue
+                for j, wrd_tuple in enumerate(wrd_utt):
+                    if phn_tuple[1] >= wrd_tuple[1] and phn_tuple[2] <= wrd_tuple[2]:
+                        phn_in_wrd_utt[j].append(phn_tuple[0])
             phn_in_wrd_data.append(phn_in_wrd_utt)
 
         return phn_in_wrd_data
 
 
-    def make_one_hot_feat(phn_list):
-        phn_idx_array = np.array([self.phn2idx[phn] for phn in phn_list])
+    def make_one_hot_feat(self, phn_list):
+        phn_idx_array = np.array([self.phn2idx[phn]-1 for phn in phn_list])
         f = np.zeros((len(phn_idx_array), self.n_phns-1))
         f[np.arange(len(phn_idx_array)), phn_idx_array] = 1.
         return f
@@ -107,25 +101,16 @@ class Speech:
         wrd_data = read_pkl(wrd_file)       # [num_of_utts x num_of_wrds x [wrd, start, end]]           
         # slb_data = read_pkl(slb_file)       # [num_of_utts x num_of_slbs x [slb, start, end]]           
 
-        phn_in_wrd_data = make_phn_in_wrd(phn_data, wrd_data)
+        phn_in_wrd_data = self.make_phn_in_wrd(phn_data, wrd_data)
+        print (sum([len(u) for u in phn_in_wrd_data]))
 
-        self.n_utts = len(self.feat)
+        self.n_utts = len(feat)
         self.n_batches = self.n_utts // self.batch_size
         if self.n_utts % self.batch_size != 0:
             self.n_batches += 1
         print("Read %s utterances" % self.n_utts)
 
-        for i, (utt, feat_utt, phn_utt, wrd_utt, phn_in_wrd_utt) \
-                in enumerate(zip(meta_data['prefix'], feat, phn_data, wrd_data, phn_in_wrd_data)):
-            spk = utt.split('_')[1]
-
-            if not spk in self.spk2utt_idx:
-                self.spks.append(spk)
-                self.spk2utt_idx[spk] = []
-                self.spk2wrd_idx[spk] = []
-            self.spk2utt_idx[spk].append(i)
-            self.utt_idx2spk[i] = spk
-
+        for i, phn_utt in enumerate(phn_data):
             # Process each phn in utt
             phn_meta_utt = []
             for j, (phn, phn_start, phn_end) in enumerate(phn_utt):
@@ -138,9 +123,28 @@ class Speech:
                 phn_meta_utt.append((phn, i, phn_start, phn_end))
             self.phn_meta.append(phn_meta_utt)
 
+        for i, (utt, feat_utt, wrd_utt, phn_in_wrd_utt) \
+                in enumerate(zip(meta_data['prefix'], feat, wrd_data, phn_in_wrd_data)):
+            spk = utt.split('_')[1]
+
+            if not spk in self.spk2utt_idx:
+                self.spks.append(spk)
+                self.spk2utt_idx[spk] = []
+                self.spk2wrd_idx[spk] = []
+            self.spk2utt_idx[spk].append(i)
+            self.utt_idx2spk[i] = spk
+
             # Process each wrd in utt
             wrd_meta_utt = []
             for j, (wrd, wrd_start, wrd_end) in enumerate(wrd_utt):
+                if j != 0 and wrd_start >= wrd_utt[j-1][1] and wrd_end <= wrd_utt[j-1][2]:
+                    print ('Words overlap:')
+                    print (i, j-1, j, wrd_utt[j-1], wrd_utt[j])
+                    continue
+                if j != len(wrd_utt)-1 and wrd_start >= wrd_utt[j+1][1] and wrd_end <= wrd_utt[j+1][2]:
+                    print ('Words overlap:')
+                    print (i, j, j+1, wrd_utt[j], wrd_utt[j+1])
+                    continue
                 if wrd_end - wrd_start == 0:
                     print (i, wrd)
                     continue
@@ -153,14 +157,18 @@ class Speech:
                 wrd_meta_utt.append((wrd, i, wrd_start, wrd_end))
 
                 self.spk2wrd_idx[spk].append(self.n_total_wrds-1)
-                self.wrd_idx2spk[self.n_tptal_wrds] = spk
-                self.feat.append(feat[i, wrd_start:wrd_end, :])
-                self.txt_feat.append(make_one_hot_feat(phn_in_wrd_utt[j]))
+                self.wrd_idx2spk[self.n_total_wrds-1] = spk
+                self.feat.append(feat[i][wrd_start:wrd_end])
+                try:
+                    self.txt_feat.append(self.make_one_hot_feat(phn_in_wrd_utt[j]))
+                except:
+                    print (i, count)
+                    print (len(phn_in_wrd_utt), len(wrd_utt))
+                    print (phn_in_wrd_utt)
+                    print (wrd_utt)
+                    exit()
 
             self.wrd_meta.append(wrd_meta_utt)
-
-            self.feat = np.array(self.feat)
-            self.txt_feat = np.array(self.txt_feat)
 
             # Process each slb in utt
             # slb_meta_utt = []
@@ -182,34 +190,32 @@ class Speech:
 
             # self.slb_meta.append(slb_meta_utt)
 
+        self.feat = np.array(self.feat)
+        self.txt_feat = np.array(self.txt_feat)
+
         return 
 
-    def get_batch_data(self, indices, indices_paired):
-        # target
-        if indices_paired:
-            batch_data = [self.feat[index] for index in np.concatenate((indices, indices_paired), axis=0)]
-        else:
-            batch_data = [self.feat[index] for index in indices]
-        batch_txt_order = sorted(range(len(batch_data)), key=lambda k: len(batch_data[k]), reverse=True)
-
+    def get_batch_data(self, indices):
         # txt
-        if indices_paired:
-            batch_txt = np.array([self.txt_feat[index] for index in np.concatenate((indices, indices_paired), axis=0)])
-        else:
-            batch_txt = [self.txt_feat[index] for index in indices]
+        batch_txt = [self.txt_feat[index] for index in indices]
         batch_txt_length = torch.tensor([len(wrd) for wrd in batch_txt], device=device)
-        batch_txt = batch_txt[batch_txt_order]
+        batch_txt_order = np.array(sorted(range(len(batch_txt)), key=lambda k: len(batch_txt[k]), reverse=True))
+        batch_txt = np.array(batch_txt)[batch_txt_order]
+        batch_txt_length = batch_txt_length[batch_txt_order]
         batch_txt = pad_sequence(batch_txt).to(device)
 
+        # target
+        batch_data = [self.feat[index] for index in indices]
+
         # randomly select pos & neg
-        for idx in feat_indices:
+        for idx in indices:
             spk = self.wrd_idx2spk[idx]
 
             # feat_pos
             idx_pos = random.choice(self.spk2wrd_idx[spk])
-            batch_data.append(self.feats[idx_pos])
+            batch_data.append(self.feat[idx_pos])
 
-        for idx in feat_indices:
+        for idx in indices:
             spk = self.wrd_idx2spk[idx]
 
             # feat_neg
@@ -217,11 +223,12 @@ class Speech:
             rand_spk = random.choice(self.spks)
             self.spks.append(spk)
             idx_neg = random.choice(self.spk2wrd_idx[rand_spk])
-            batch_data.append(self.feats[idx_neg])
+            batch_data.append(self.feat[idx_neg])
 
         batch_length = torch.tensor([len(wrd) for wrd in batch_data], device=device)
-        batch_order = sorted(range(len(batch_data)), key=lambda k: len(batch_data[k]), reverse=True)
-        batch_data = batch_data[batch_order]
+        batch_order = np.array(sorted(range(len(batch_data)), key=lambda k: len(batch_data[k]), reverse=True))
+        batch_data = np.array(batch_data)[batch_order]
+        batch_length = batch_length[batch_order]
         batch_data = pad_sequence(batch_data).to(device)
 
         # invert indices for tracing

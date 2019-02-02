@@ -12,10 +12,10 @@ from torch import optim
 from torch import autograd
 import torch.nn.functional as F
 
-from A2VwD import A2VwD, A2V, Model
+from WGAN_GP import FCDiscriminator, calc_gradient_penalty
+from model import A2VwD, A2V, Model
 from seq2seq import EncoderRNN, DecoderRNN
-from utils import weight_init, repackage_hidden, write_pkl
-from utils import thresh_dist_segment_eval, r_val_eval, print_progress
+from utils import weight_init, write_pkl, Logger
 from torch.optim.lr_scheduler import StepLR
 
 
@@ -31,7 +31,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Solver:
     def __init__(self, init_lr, batch_size, seq_len, feat_dim, hidden_dim, 
-                 enc_num_layers, dec_num_layers, D_num_layers, dropout_rate, iter_d, log_dir):
+                 enc_num_layers, dec_num_layers, D_num_layers, dropout_rate, 
+                 iter_d, log_dir, mode):
 
         self.init_lr = init_lr
         self.batch_size = batch_size
@@ -44,7 +45,7 @@ class Solver:
         self.dropout_rate = dropout_rate
         self.iter_d = iter_d
 
-        # self.mode = mode
+        self.mode = mode
         if self.mode == 'train':
             self.logger = Logger(os.path.join(log_dir))
 
@@ -83,34 +84,34 @@ class Solver:
 
         # A2V
         input_MLP = MLP([self.feat_dim, self.hidden_dim, self.hidden_dim])
-        phn_encoder = EncoderRNN(self.feat_dim, self.seq_len, self.hidden_dim, 
+        phn_encoder = EncoderRNN(self.hidden_dim, self.seq_len, self.hidden_dim, 
                                  input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate,
                                  n_layers=self.enc_num_layers, bidirectional=True, rnn_cell='gru', variable_lengths=True)
-        spk_encoder = EncoderRNN(self.feat_dim, self.seq_len, self.hidden_dim, 
+        spk_encoder = EncoderRNN(self.hidden_dim, self.seq_len, self.hidden_dim, 
                                  input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate,
                                  n_layers=self.enc_num_layers, bidirectional=True, rnn_cell='gru', variable_lengths=True)
         decoder = DecoderRNN(self.hidden_dim, self.seq_len, self.hidden_dim, n_layers=self.dec_num_layers, 
-                             rnn_cell='gru', input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate)
+                             rnn_cell='gru', bidirectional=True, input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate)
         output_MLP = MLP([self.hidden_dim, self.hidden_dim, self.feat_dim])
 
-        a2v = A2VwD(input_MLP, phn_encoder, spk_encoder, decoder, output_MLPi, self.mode, self.decoder_num_layers)
+        a2v = A2VwD(input_MLP, phn_encoder, spk_encoder, decoder, output_MLP, self.dec_num_layers)
 
         # T2V
-        txt_input_MLP = MLP([self.feat_dim, self.hidden_dim])
-        txt_encoder = EncoderRNN(self.feat_dim, self.seq_len, self.hidden_dim, 
+        txt_input_MLP = MLP([60, self.hidden_dim])
+        txt_encoder = EncoderRNN(self.hidden_dim, self.seq_len, self.hidden_dim, 
                                  input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate,
                                  n_layers=1, bidirectional=True, rnn_cell='gru', variable_lengths=True)
         txt_decoder = DecoderRNN(self.hidden_dim, self.seq_len, self.hidden_dim, n_layers=1, 
-                             rnn_cell='gru', input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate)
-        txt_output_MLP = MLP([self.hidden_dim, self.feat_dim])
+                             rnn_cell='gru', bidirectional=True, input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate)
+        txt_output_MLP = MLP([self.hidden_dim, 60])
 
-        t2v = A2V(txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, self.mode, self.decoder_num_layers)
+        t2v = A2V(txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1)
 
         # size of discriminator input = num_directions * p_hidden_dim * 2
-        discriminator = Discriminator(2*self.hidden_dim*2, self.hidden_dim*2, self.D_num_layers)
+        discriminator = FCDiscriminator(2*self.hidden_dim*2, self.hidden_dim*2, self.D_num_layers)
 
         # the whole model
-        self.model = Model(a2v, t2v, discriminator, self.mode) 
+        self.model = Model(a2v, t2v, discriminator) 
 
         self.model.to(device)
         # print (next(self.model.parameters()).is_cuda)
@@ -139,29 +140,29 @@ class Solver:
         total_indices = np.arange(data.n_wrds)
         if mode == 'train':
             np.random.shuffle(total_indices)
-            total_indices_paired = np.arange(data.num_paired)
+            if data.num_paired == -1:
+                num_paired = data.n_wrds
+            total_indices_paired = np.arange(num_paired)
 
         for i in tqdm(range(data.n_batches)):
             indices = total_indices[i*self.batch_size:(i+1)*self.batch_size]
             batch_size = len(indices)
             if mode == 'train':
                 indices_paired = np.random.choice(total_indices_paired, batch_size, False)
-            else:
-                indices_paired = None
+                indices = np.concatenate((indices, indices_paired), axis=0)
 
             batch_data, batch_length, batch_order, \
                 batch_txt, batch_txt_length, batch_txt_order \
-                = data.get_batch_data(indices, indices_paired)
+                = data.get_batch_data(indices)
 
             if mode == 'train':
-                optimizer.zero_grad()
                 ################
                 # (1) Update D #
                 ################
                 for p in self.model.discriminator.parameters(): # reset requires_grad
                     p.requires_grad = True # set to False below in G update
 
-                for _ in self.iter_d:
+                for _ in range(self.iter_d):
                     self.model.discriminator.zero_grad()
 
                     phn_hiddens, spk_hiddens, txt_hiddens, r_loss, g_loss, d_loss, \
@@ -227,15 +228,15 @@ class Solver:
     def train_iters(self, train_data, eval_data, saver, n_epochs, global_step, print_every=1):
         # optimizer = optim.Adam(self.model.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
         optimizer_D = optim.Adam(self.model.discriminator.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
-        optimizer_G = optim.Adam([self.model.a2v.parameters(), self.model.t2v.parameters(),
+        optimizer_G = optim.Adam([{'params': self.model.a2v.parameters()}, {'params': self.model.t2v.parameters()}],
                                   lr=self.init_lr, betas=(0.5, 0.9))
 
         for epoch in range(global_step+1, global_step+1+n_epochs):
             print ('Epoch: ', epoch)
             # Train
-            train_G_losses, train_D_losses, train_r_loss, train_g_loss, train_pos_spk_loss, train_neg_spk_loss, 
-                                  train_paired_loss, train_d_loss, train_gp_loss \
-                                  = self.compute(train_data, 'train', optimizer_D=optimizer_D, optimizer_G=optimizer_G)
+            train_G_losses, train_D_losses, train_r_loss, train_g_loss, train_pos_spk_loss, train_neg_spk_loss, \
+                train_paired_loss, train_d_loss, train_gp_loss \
+                = self.compute(train_data, 'train', optimizer_D=optimizer_D, optimizer_G=optimizer_G)
         
             self.logger.scalar_summary('train_losses/G_losses', train_G_losses, epoch)
             self.logger.scalar_summary('train_losses/D_losses', train_D_losses, epoch)
@@ -253,9 +254,9 @@ class Solver:
                    '\nd_loss: ', train_d_loss, ' gp_loss: ', train_gp_loss)
 
             # Evaluate
-            eval_G_losses, eval_D_losses, eval_r_loss, eval_g_loss, eval_pos_spk_loss, eval_neg_spk_loss, 
-                                  eval_paired_loss, eval_d_loss, eval_gp_loss \
-                                  = self.compute(eval_data, 'test')
+            eval_G_losses, eval_D_losses, eval_r_loss, eval_g_loss, eval_pos_spk_loss, eval_neg_spk_loss, \
+                eval_paired_loss, eval_d_loss, eval_gp_loss \
+                = self.compute(eval_data, 'test')
         
             self.logger.scalar_summary('eval_losses/G_losses', eval_G_losses, epoch)
             self.logger.scalar_summary('eval_losses/D_losses', eval_D_losses, epoch)
@@ -289,9 +290,9 @@ class Solver:
     #
 
     def evaluate(self, test_data, result_dir, print_every=1):
-        eval_G_losses, eval_D_losses, eval_r_loss, eval_g_loss, eval_pos_spk_loss, eval_neg_spk_loss, 
-                              eval_paired_loss, eval_d_loss, eval_gp_loss \
-                              = self.compute(eval_data, 'test', result_dir=result_dir)
+        eval_G_losses, eval_D_losses, eval_r_loss, eval_g_loss, eval_pos_spk_loss, eval_neg_spk_loss, \
+            eval_paired_loss, eval_d_loss, eval_gp_loss \
+            = self.compute(eval_data, 'test', result_dir=result_dir)
 
         print ('Eval -----> G_losses: ',eval_G_losses, ' D_losses: ', eval_D_losses, 
                '\nr_loss: ', eval_r_loss, ' g_loss: ',eval_g_loss, ' pos_spk_loss: ', eval_pos_spk_loss, 
