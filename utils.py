@@ -189,7 +189,7 @@ def mask_with_length(tensor, length):
     b = length.view(-1, *([1]*(rank-1))).int()
 
     mask = torch.lt(a, b).float().to(device)
-    return tensor*mask, mask
+    return tensor.float()*mask, mask
 
 
 ######################################################################

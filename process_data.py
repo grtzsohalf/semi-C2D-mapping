@@ -56,7 +56,7 @@ class Speech:
         self.idx2wrd = {}
         self.n_wrds = 0
 
-        self.phn2idx = {}
+        self.phn2idx = {'h#': 0}
         self.phn2cnt = Counter()
         self.idx2phn = {0: 'h#'}
         self.n_phns = 1              # Count 'h#'
@@ -162,7 +162,7 @@ class Speech:
                 try:
                     self.txt_feat.append(self.make_one_hot_feat(phn_in_wrd_utt[j]))
                 except:
-                    print (i, count)
+                    print (i, j)
                     print (len(phn_in_wrd_utt), len(wrd_utt))
                     print (phn_in_wrd_utt)
                     print (wrd_utt)
@@ -195,7 +195,7 @@ class Speech:
 
         return 
 
-    def get_batch_data(self, indices):
+    def get_batch_data(self, indices, mode):
         # txt
         batch_txt = [self.txt_feat[index] for index in indices]
         batch_txt_length = torch.tensor([len(wrd) for wrd in batch_txt], device=device)
@@ -208,14 +208,18 @@ class Speech:
         batch_data = [self.feat[index] for index in indices]
 
         # randomly select pos & neg
-        for idx in indices:
+        if mode == 'train':
+            pos_neg_indices = indices[:len(batch_data)//2]
+        else:
+            pos_neg_indices = indices
+        for idx in pos_neg_indices:
             spk = self.wrd_idx2spk[idx]
 
             # feat_pos
             idx_pos = random.choice(self.spk2wrd_idx[spk])
             batch_data.append(self.feat[idx_pos])
 
-        for idx in indices:
+        for idx in pos_neg_indices:
             spk = self.wrd_idx2spk[idx]
 
             # feat_neg

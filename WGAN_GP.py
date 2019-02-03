@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.autograd as autograd
 
 from utils import weight_init
 
@@ -57,7 +58,7 @@ class FCDiscriminator(nn.Module):
     def _makeFcSequential(self, input_size, hidden_size, n_layers):
         fc_list = [nn.Linear(input_size, hidden_size), nn.LeakyReLU()]
         for i in range(n_layers-2):
-            fc_list.append(nn.Linear(input_size, hidden_size))
+            fc_list.append(nn.Linear(hidden_size, hidden_size))
             fc_list.append(nn.LeakyReLU())
         fc_list.append(nn.Linear(hidden_size, 1))
         return nn.Sequential(*fc_list)
@@ -71,8 +72,8 @@ class FCDiscriminator(nn.Module):
 # -----------------------------
 #
 
-def calc_gradient_penalty(netD, real_data, fake_data):
-    alpha = torch.rand(BATCH_SIZE, 1)
+def calc_gradient_penalty(batch_size, netD, real_data, fake_data):
+    alpha = torch.rand(batch_size, 1)
     alpha = alpha.expand(real_data.size())
     alpha = alpha.cuda() if USE_CUDA else alpha
 
