@@ -36,10 +36,10 @@ class Model(nn.Module):
         if mask:
             x, _ = mask_with_length(x, lengths)
             y, _ = mask_with_length(y, lengths)
-        # criterion = nn.MSELoss(reduction='none')
-        # MSE_loss = criterion(target_feats, reconstructed_target)
-        MSE_loss = (x - y) ** 2
-        return MSE_loss.mean()
+        # criterion = nn.MSELoss()
+        # MSE_loss = criterion(x, y)
+        MSE_loss = torch.mean(torch.sum((x - y) ** 2, dim=-1))
+        return MSE_loss
 
     def compute_GAN_losses(self, batch_size, target, pos, neg):
         # using WGAN-GP
@@ -54,6 +54,8 @@ class Model(nn.Module):
         neg_concat = torch.cat((target_last, neg), -1)
         pos_score = self.discriminator(pos_concat)
         neg_score = self.discriminator(neg_concat)
+        # criterion = nn.MSELoss()
+        # generation_loss = criterion(pos_score, neg_score)
         generation_loss = ((pos_score - neg_score) ** 2).mean()
         discrimination_loss = - generation_loss
 
@@ -63,8 +65,16 @@ class Model(nn.Module):
     def compute_speaker_losses(self, target, pos, neg):
         # pairs of (target, pos) -> as close as possible
         # pairs of (target, neg) -> far from each other to an extent
-        pos_speaker_loss = ((target - pos) ** 2).mean()
-        neg_speaker_loss = torch.mean(torch.clamp(0.01 - torch.norm(target - neg, dim=-1), min=0.)) 
+        # pos_speaker_loss = self.compute_reconstruction_loss(target, pos, False)
+        # MSE_criterion = nn.MSELoss(reduction='none')
+        # hinge_criterion = nn.HingeEmbeddingLoss(margin=0.01)
+        # neg_speaker_loss = hinge_criterion(MSE_criterion(target, neg), 
+                                           # -torch.ones(target.shape[0], device=device))
+        pos_speaker_loss = torch.mean(torch.sum((target - pos) ** 2, dim=-1))
+        neg_speaker_loss = torch.mean(torch.clamp(0.01-torch.sum((target - neg) ** 2, dim=-1), min=0.)) 
+        # print (' ')
+        # print (torch.mean(torch.norm(target - pos, dim=-1) ** 2))
+        # print (torch.mean(torch.norm(target - neg, dim=-1) ** 2))
         return pos_speaker_loss, neg_speaker_loss
 
     def forward(self, batch_size, feats, lengths, orders, txt_feats, txt_lengths, txt_orders, mode):
