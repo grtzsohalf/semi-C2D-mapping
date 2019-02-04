@@ -24,7 +24,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 WIDTH = 10
-WEIGHT_LM = 1.0
+WEIGHT_LM = 0.0
 
 
 ######################################################################
@@ -367,7 +367,7 @@ class Solver:
             _, _ = self.score(test_data, 
                               os.path.join(result_dir, f'result_test_{epoch}.pkl'), 
                               os.path.join(result_dir, f'trans_test_{epoch}_{WIDTH}_{WEIGHT_LM}.txt'),
-                              os.path.join(result_dir, f'acc_test_{WIDTH}_{WEIGHT_LM}.txt')
+                              os.path.join(result_dir, f'acc_test_{WIDTH}_{WEIGHT_LM}.txt'),
                               True, train_txt_hiddens, train_wrds)
 
             # Save model
