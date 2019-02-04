@@ -233,7 +233,7 @@ class Solver:
     # The scoring function:
     #
 
-    def score(self, data, result_file, trans_file, use_train=False, train_txt_hiddens=None, train_wrds=None):
+    def score(self, data, result_file, trans_file, acc_file=None, use_train=False, train_txt_hiddens=None, train_wrds=None):
         phn_hiddens = np.array([])
         if not use_train:
             txt_hiddens = np.array([])
@@ -292,6 +292,9 @@ class Solver:
             if w1 == w2:
                 acc += 1
         print (acc / len(trans), acc, len(trans))
+        if acc_file:
+            with open(acc_file,'a') as f:
+                f.write(str(acc / len(trans))+'\n')
 
         return unique_txt_hiddens, unique_wrds
 
@@ -337,7 +340,8 @@ class Solver:
         
             train_txt_hiddens, train_wrds = self.score(train_data,
                                                        os.path.join(result_dir, f'result_train_{epoch}.pkl'), 
-                                                       os.path.join(result_dir, f'trans_train_{epoch}_{WIDTH}_{WEIGHT_LM}.txt'))
+                                                       os.path.join(result_dir, f'trans_train_{epoch}_{WIDTH}_{WEIGHT_LM}.txt'),
+                                                       os.path.join(result_dir, f'acc_train_{WIDTH}_{WEIGHT_LM}.txt'))
 
             # Evaluate for eval data
             eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
@@ -363,6 +367,7 @@ class Solver:
             _, _ = self.score(test_data, 
                               os.path.join(result_dir, f'result_test_{epoch}.pkl'), 
                               os.path.join(result_dir, f'trans_test_{epoch}_{WIDTH}_{WEIGHT_LM}.txt'),
+                              os.path.join(result_dir, f'acc_test_{WIDTH}_{WEIGHT_LM}.txt')
                               True, train_txt_hiddens, train_wrds)
 
             # Save model
@@ -394,7 +399,8 @@ class Solver:
 
         train_txt_hiddens, train_wrds = self.score(train_data, 
                                                    os.path.join(result_dir, f'result_train.pkl'), 
-                                                   os.path.join(result_dir, f'trans_train_{WIDTH}_{WEIGHT_LM}.txt'))
+                                                   os.path.join(result_dir, f'trans_train_{WIDTH}_{WEIGHT_LM}.txt'),
+                                                   None)
 
         # Evaluate for test data
         eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
@@ -409,4 +415,5 @@ class Solver:
         _, _ = self.score(test_data, 
                           os.path.join(result_dir, f'result_test.pkl'), 
                           os.path.join(result_dir, f'trans_test_{WIDTH}_{WEIGHT_LM}.txt'),
+                          None,
                           True, train_txt_hiddens, train_wrds)
