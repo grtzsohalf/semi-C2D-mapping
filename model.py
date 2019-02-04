@@ -38,7 +38,7 @@ class Model(nn.Module):
             y, _ = mask_with_length(y, lengths)
         # criterion = nn.MSELoss()
         # MSE_loss = criterion(x, y)
-        MSE_loss = torch.mean(torch.sum((x - y) ** 2, dim=-1))
+        MSE_loss = torch.mean((x - y) ** 2)
         return MSE_loss
 
     def compute_GAN_losses(self, batch_size, target, pos, neg):
@@ -56,7 +56,7 @@ class Model(nn.Module):
         neg_score = self.discriminator(neg_concat)
         # criterion = nn.MSELoss()
         # generation_loss = criterion(pos_score, neg_score)
-        generation_loss = ((pos_score - neg_score) ** 2).mean()
+        generation_loss = torch.mean((pos_score - neg_score) ** 2)
         discrimination_loss = - generation_loss
 
         GP_loss = calc_gradient_penalty((batch_size//2)+1, self.discriminator, pos_concat, neg_concat)
@@ -70,11 +70,8 @@ class Model(nn.Module):
         # hinge_criterion = nn.HingeEmbeddingLoss(margin=0.01)
         # neg_speaker_loss = hinge_criterion(MSE_criterion(target, neg), 
                                            # -torch.ones(target.shape[0], device=device))
-        pos_speaker_loss = torch.mean(torch.sum((target - pos) ** 2, dim=-1))
-        neg_speaker_loss = torch.mean(torch.clamp(0.01-torch.sum((target - neg) ** 2, dim=-1), min=0.)) 
-        # print (' ')
-        # print (torch.mean(torch.norm(target - pos, dim=-1) ** 2))
-        # print (torch.mean(torch.norm(target - neg, dim=-1) ** 2))
+        pos_speaker_loss = torch.mean((target - pos) ** 2)
+        neg_speaker_loss = torch.mean(torch.clamp(0.01-torch.mean((target - neg) ** 2, dim=-1), min=0.)) 
         return pos_speaker_loss, neg_speaker_loss
 
     def forward(self, batch_size, feats, lengths, orders, txt_feats, txt_lengths, txt_orders, mode):
