@@ -12,6 +12,7 @@ import argparse
 from solver import Solver
 from process_data import Speech
 from saver import PytorchSaver 
+from utils import count_LM
 
 
 ######################################################################
@@ -111,7 +112,7 @@ def add_parser():
     parser.add_argument('result_dir', 
         metavar='<result directory>')
     parser.add_argument('mode', 
-        metavar='<mode (train or eval)>')    
+        metavar='<mode (train or test)>')    
     parser.add_argument('num_paired', type=int, default=-1,
         metavar='<number of paired data>')    
 
@@ -136,12 +137,24 @@ if __name__ == '__main__':
     if FLAG.mode == 'train':
         train_data = Speech('train', FLAG.batch_size, FLAG.num_paired)
         train_data.process_data(FLAG.train_meta, FLAG.train_mfcc, FLAG.train_phn, FLAG.train_wrd, FLAG.train_slb)
-        eval_data = Speech('eval', FLAG.batch_size, None)
-        eval_data.process_data(FLAG.test_meta, FLAG.test_mfcc, FLAG.test_phn, FLAG.test_wrd, FLAG.test_slb)
-    else:
-        test_data = Speech('test', FLAG.batch_size, None)
+        test_data = Speech('test', FLAG.batch_size, FLAG.num_paired)
         test_data.process_data(FLAG.test_meta, FLAG.test_mfcc, FLAG.test_phn, FLAG.test_wrd, FLAG.test_slb)
+    else:
+        test_data = Speech('test', FLAG.batch_size, FLAG.num_paired)
+        test_data.process_data(FLAG.test_meta, FLAG.test_mfcc, FLAG.test_phn, FLAG.test_wrd, FLAG.test_slb)
+        train_data = Speech('train', FLAG.batch_size, FLAG.num_paired)
+        train_data.process_data(FLAG.train_meta, FLAG.train_mfcc, FLAG.train_phn, FLAG.train_wrd, FLAG.train_slb)
     print ("Data processed!")
+
+    # count LM
+    wrds = []
+    for wrd_meta_utt in train_data.wrd_meta:
+        wrds.append([w[0] for w in wrd_meta_utt])
+    for wrd_meta_utt in test_data.wrd_meta:
+        wrds.append([w[0] for w in wrd_meta_utt])
+    LM = count_LM(wrds) 
+    train_data.LM = LM
+    test_data.LM = LM
 
 
     ######################################################################
@@ -193,7 +206,7 @@ if __name__ == '__main__':
 
     if FLAG.mode == 'train':
         print ('Start training!')
-        solver.train_iters(train_data, eval_data, saver, FLAG.n_epochs, global_step)
+        solver.train_iters(train_data, test_data, saver, FLAG.n_epochs, global_step, FLAG.result_dir)
     else:
         print ('Start testing!')
-        solver.evaluate(test_data, FLAG.result_dir)
+        solver.evaluate(test_data, train_data, FLAG.result_dir)

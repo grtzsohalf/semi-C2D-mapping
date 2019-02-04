@@ -45,10 +45,10 @@ class Model(nn.Module):
         # using WGAN-GP
         # pairs of (target, pos) -> real
         # pairs of (target, neg) -> fake
-        target_first = target[:batch_size//2]
-        target_last = target[batch_size//2:]
-        pos = pos[:batch_size//2]
-        neg = neg[batch_size//2:]
+        target_first = target[:(batch_size//2)+1]
+        target_last = target[-(batch_size//2)-1:]
+        pos = pos[:(batch_size//2)+1]
+        neg = neg[-(batch_size//2)-1:]
 
         pos_concat = torch.cat((target_first, pos), -1)
         neg_concat = torch.cat((target_last, neg), -1)
@@ -57,7 +57,7 @@ class Model(nn.Module):
         generation_loss = ((pos_score - neg_score) ** 2).mean()
         discrimination_loss = - generation_loss
 
-        GP_loss = calc_gradient_penalty(batch_size//2, self.discriminator, pos_concat, neg_concat)
+        GP_loss = calc_gradient_penalty((batch_size//2)+1, self.discriminator, pos_concat, neg_concat)
         return generation_loss, discrimination_loss, GP_loss
 
     def compute_speaker_losses(self, target, pos, neg):

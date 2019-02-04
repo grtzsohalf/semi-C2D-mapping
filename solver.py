@@ -4,6 +4,7 @@ import os
 import time
 from datetime import datetime 
 from tqdm import tqdm
+import pickle
 
 import numpy as np
 import torch
@@ -15,11 +16,15 @@ import torch.nn.functional as F
 from WGAN_GP import FCDiscriminator
 from model import A2VwD, A2V, Model
 from seq2seq import EncoderRNN, DecoderRNN
-from utils import weight_init, write_pkl, Logger
+from utils import weight_init, write_pkl, Logger, getNN, beam_search
 from torch.optim.lr_scheduler import StepLR
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+WIDTH = 10
+WEIGHT_LM = 1.0
 
 
 ######################################################################
@@ -99,10 +104,9 @@ class Solver:
         # T2V
         txt_input_MLP = MLP([60, self.hidden_dim])
         txt_encoder = EncoderRNN(self.hidden_dim, self.seq_len, self.hidden_dim, 
-                                 input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate,
                                  n_layers=1, bidirectional=True, rnn_cell='gru', variable_lengths=True)
         txt_decoder = DecoderRNN(self.hidden_dim*2, self.seq_len, self.hidden_dim*2, n_layers=1, 
-                             rnn_cell='gru', bidirectional=True, input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate)
+                             rnn_cell='gru', bidirectional=True)
         txt_output_MLP = MLP([self.hidden_dim*2, 60])
 
         t2v = A2V(txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1)
@@ -116,12 +120,12 @@ class Solver:
         self.model.to(device)
         # print (next(self.model.parameters()).is_cuda)
 
-
+    
     ######################################################################
     # The core compute function:
     #
     
-    def compute(self, data, mode, optimizer_G=None, optimizer_D=None, result_dir=None):
+    def compute(self, data, mode, optimizer_G=None, optimizer_D=None, result_file=None):
         if mode == 'train':
             self.model.train()
         else:
@@ -138,13 +142,15 @@ class Solver:
         total_d_loss = 0
         total_gp_loss = 0
 
-        total_indices = np.arange(data.n_wrds)
+        total_indices = np.arange(data.n_total_wrds)
         if mode == 'train':
             np.random.shuffle(total_indices)
             if data.num_paired == -1:
-                num_paired = data.n_wrds
-            total_indices_paired = np.arange(num_paired)
+                total_indices_paired = np.arange(data.n_total_wrds)
+            else:
+                total_indices_paired = np.arange(data.num_paired)
 
+        # for i in tqdm(range(data.n_batches-1, data.n_batches)):
         for i in tqdm(range(data.n_batches)):
             indices = total_indices[i*self.batch_size:(i+1)*self.batch_size]
             batch_size = len(indices)
@@ -198,11 +204,11 @@ class Solver:
                 D_losses = d_loss + 10 * gp_loss
                 G_losses = r_loss + txt_r_loss + g_loss + pos_spk_loss + neg_spk_loss + paired_loss
 
-            if mode == 'test' and result_dir:
+            if mode == 'test' and result_file:
                 write_pkl([phn_hiddens.cpu().detach().numpy(), 
                            spk_hiddens.cpu().detach().numpy(), 
                            txt_hiddens.cpu().detach().numpy()], 
-                          os.path.join(result_dir, 'result.pkl'))
+                          result_file)
 
             total_G_losses += G_losses.item()
             total_D_losses += D_losses.item()
@@ -224,18 +230,85 @@ class Solver:
 
 
     ######################################################################
+    # The scoring function:
+    #
+
+    def score(self, data, result_file, trans_file, use_train=False, train_txt_hiddens=None, train_wrds=None):
+        phn_hiddens = np.array([])
+        if not use_train:
+            txt_hiddens = np.array([])
+        with open(result_file, 'rb') as f:
+            while True:
+                try:
+                    hiddens = pickle.load(f)
+                    phn = hiddens[0]
+                    if not use_train:
+                        txt = hiddens[2]
+                    if phn_hiddens.size:
+                        phn_hiddens = np.concatenate((phn_hiddens, phn), axis=0)
+                        if not use_train:
+                            txt_hiddens = np.concatenate((txt_hiddens, txt), axis=0)
+                    else:
+                        phn_hiddens = phn
+                        if not use_train:
+                            txt_hiddens = txt
+                except EOFError:
+                    break
+
+        # 
+        if not use_train:
+            unique_txt_hiddens = []
+            unique_phn_wrds = []
+            for phn_wrd, hidden in zip(data.phn_wrds, txt_hiddens):
+                if not phn_wrd in unique_phn_wrds:
+                    unique_phn_wrds.append(phn_wrd)
+                    unique_txt_hiddens.append(hidden)
+            unique_txt_hiddens = np.array(unique_txt_hiddens)
+            unique_wrds = np.array([w[0] for w in unique_phn_wrds])
+        else:
+            unique_txt_hiddens = train_txt_hiddens
+            unique_wrds = train_wrds
+
+        print (phn_hiddens.shape)
+        print (unique_txt_hiddens.shape)
+
+        sim_values, sim_wrds = getNN(200, phn_hiddens, unique_txt_hiddens, unique_wrds)
+        utt_lens = [len(u) for u in data.wrd_meta]
+        print (sum(utt_lens), len(sim_values), len(sim_wrds))
+        start = 0
+        sim_value_utts = []
+        sim_wrd_utts = []
+        for l in utt_lens:
+            sim_value_utts.append(sim_values[start:start+l])
+            sim_wrd_utts.append(sim_wrds[start:start+l])
+            start += l
+        # sim_value_utts = [sim_values[:utt_lens[0]]]
+        # sim_word_utts = [sim_words[:utt_lens[0]]]
+
+        trans = beam_search(sim_value_utts, sim_wrd_utts, data.LM, WIDTH, WEIGHT_LM, trans_file)
+
+        acc = 0
+        for w1, w2 in zip(trans, data.wrds):
+            if w1 == w2:
+                acc += 1
+        print (acc / len(trans), acc, len(trans))
+
+        return unique_txt_hiddens, unique_wrds
+
+
+    ######################################################################
     # The whole training process
     # --------------------------
     #
 
-    def train_iters(self, train_data, eval_data, saver, n_epochs, global_step, print_every=1):
+    def train_iters(self, train_data, test_data, saver, n_epochs, global_step, result_dir, print_every=1):
         # optimizer = optim.Adam(self.model.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
         optimizer_D = optim.Adam(self.model.discriminator.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
         optimizer_G = optim.Adam([{'params': self.model.a2v.parameters()}, {'params': self.model.t2v.parameters()}],
                                   lr=self.init_lr, betas=(0.5, 0.9))
 
         for epoch in range(global_step+1, global_step+1+n_epochs):
-            print ('Epoch: ', epoch)
+            print ('\nEpoch: ', epoch)
             # Train
             train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
                 train_neg_spk_loss, train_paired_loss, train_d_loss, train_gp_loss \
@@ -253,14 +326,23 @@ class Solver:
             self.logger.scalar_summary('train_losses/gp_loss', train_gp_loss, epoch)
 
             print ('Train -----> G_losses: ',train_G_losses, ' D_losses: ', train_D_losses, 
-                   '\nr_loss: ', train_r_loss, '\ntxt_r_loss: ', train_txt_r_loss, '\ng_loss: ',train_g_loss, 
+                   '\nr_loss:       ', train_r_loss, '\ntxt_r_loss:   ', train_txt_r_loss, '\ng_loss:       ',train_g_loss, 
                    '\npos_spk_loss: ', train_pos_spk_loss, '\nneg_spk_loss: ', train_neg_spk_loss, 
-                   '\npaired_loss: ', train_paired_loss, '\nd_loss: ', train_d_loss, '\ngp_loss: ', train_gp_loss)
+                   '\npaired_loss:  ', train_paired_loss, '\nd_loss:       ', train_d_loss, '\ngp_loss:      ', train_gp_loss)
 
-            # Evaluate
+            # Evaluate for train data
+            train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
+                train_neg_spk_loss, train_paired_loss, train_d_loss, train_gp_loss \
+                = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train_{epoch}.pkl'))
+        
+            train_txt_hiddens, train_wrds = self.score(train_data,
+                                                       os.path.join(result_dir, f'result_train_{epoch}.pkl'), 
+                                                       os.path.join(result_dir, f'trans_train_{epoch}_{WIDTH}_{WEIGHT_LM}.txt'))
+
+            # Evaluate for eval data
             eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
                 eval_neg_spk_loss, eval_paired_loss, eval_d_loss, eval_gp_loss \
-                = self.compute(eval_data, 'test')
+                = self.compute(test_data, 'test', result_file=os.path.join(result_dir, f'result_test_{epoch}.pkl'))
         
             self.logger.scalar_summary('eval_losses/G_losses', eval_G_losses, epoch)
             self.logger.scalar_summary('eval_losses/D_losses', eval_D_losses, epoch)
@@ -274,9 +356,14 @@ class Solver:
             self.logger.scalar_summary('eval_losses/gp_loss', eval_gp_loss, epoch)
 
             print ('Eval -----> G_losses: ',eval_G_losses, ' D_losses: ', eval_D_losses, 
-                   '\nr_loss: ', eval_r_loss, '\ntxt_r_loss: ', eval_txt_r_loss, '\ng_loss: ',eval_g_loss, 
+                   '\nr_loss:       ', eval_r_loss, '\ntxt_r_loss:   ', eval_txt_r_loss, '\ng_loss:       ',eval_g_loss, 
                    '\npos_spk_loss: ', eval_pos_spk_loss, '\nneg_spk_loss: ', eval_neg_spk_loss, 
-                   '\npaired_loss: ', eval_paired_loss, '\nd_loss: ', eval_d_loss, '\ngp_loss: ', eval_gp_loss)
+                   '\npaired_loss:  ', eval_paired_loss, '\nd_loss:       ', eval_d_loss, '\ngp_loss:      ', eval_gp_loss)
+
+            _, _ = self.score(test_data, 
+                              os.path.join(result_dir, f'result_test_{epoch}.pkl'), 
+                              os.path.join(result_dir, f'trans_test_{epoch}_{WIDTH}_{WEIGHT_LM}.txt'),
+                              True, train_txt_hiddens, train_wrds)
 
             # Save model
             state = {
@@ -294,12 +381,32 @@ class Solver:
     # ----------------------------
     #
 
-    def evaluate(self, test_data, result_dir, print_every=1):
+    def evaluate(self, test_data, train_data, result_dir, print_every=1):
+        # Evaluate for train data
+        train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
+            train_neg_spk_loss, train_paired_loss, train_d_loss, train_gp_loss \
+            = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train.pkl'))
+
+        print ('Train -----> G_losses: ',train_G_losses, ' D_losses: ', train_D_losses, 
+               '\nr_loss:       ', train_r_loss, '\ntxt_r_loss:   ', train_txt_r_loss, '\ng_loss:       ',train_g_loss, 
+               '\npos_spk_loss: ', train_pos_spk_loss, '\nneg_spk_loss: ', train_neg_spk_loss, 
+               '\npaired_loss:  ', train_paired_loss, '\nd_loss:       ', train_d_loss, '\ngp_loss:      ', train_gp_loss)
+
+        train_txt_hiddens, train_wrds = self.score(train_data, 
+                                                   os.path.join(result_dir, f'result_train.pkl'), 
+                                                   os.path.join(result_dir, f'trans_train_{WIDTH}_{WEIGHT_LM}.txt'))
+
+        # Evaluate for test data
         eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
             eval_neg_spk_loss, eval_paired_loss, eval_d_loss, eval_gp_loss \
-            = self.compute(eval_data, 'test', result_dir=result_dir)
+            = self.compute(test_data, 'test', result_file=os.path.join(result_dir, 'result_test.pkl'))
 
         print ('Eval -----> G_losses: ',eval_G_losses, ' D_losses: ', eval_D_losses, 
-               '\nr_loss: ', eval_r_loss, '\ntxt_r_loss: ', eval_txt_r_loss, '\ng_loss: ',eval_g_loss, 
+               '\nr_loss:       ', eval_r_loss, '\ntxt_r_loss:   ', eval_txt_r_loss, '\ng_loss:       ',eval_g_loss, 
                '\npos_spk_loss: ', eval_pos_spk_loss, '\nneg_spk_loss: ', eval_neg_spk_loss, 
-               '\npaired_loss: ', eval_paired_loss, '\nd_loss: ', eval_d_loss, '\ngp_loss: ', eval_gp_loss)
+               '\npaired_loss:  ', eval_paired_loss, '\nd_loss:       ', eval_d_loss, '\ngp_loss:      ', eval_gp_loss)
+
+        _, _ = self.score(test_data, 
+                          os.path.join(result_dir, f'result_test.pkl'), 
+                          os.path.join(result_dir, f'trans_test_{WIDTH}_{WEIGHT_LM}.txt'),
+                          True, train_txt_hiddens, train_wrds)

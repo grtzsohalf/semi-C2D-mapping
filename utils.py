@@ -1,12 +1,16 @@
 import time
 import math
 import pickle
+from collections import Counter
+from tqdm import tqdm
+import random
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.init as init
 
+import os
 import sys
 
 from tensorboardX import SummaryWriter
@@ -463,3 +467,115 @@ def print_progress(progress, total, precision, recall, output_msg):
     sys.stdout.write('\b'*len(output_msg))
     sys.stdout.write(output_msg)
     sys.stdout.flush()
+
+
+def count_LM(word_utts, n_grams=3, LM_file=None):
+    if LM_file and os.path.isfile(LM_file):
+        with open(LM_file, 'rb') as f:
+            return pickle.load(f)
+
+    counter = Counter()
+    for word_utt in word_utts:
+        counter[('<BOS>', '<BOS>', word_utt[0])] += 1
+        counter[('<BOS>', word_utt[0], word_utt[1])] += 1
+        for i, word in enumerate(word_utt[:-n_grams+1]):
+            counter[(word, word_utt[i+1], word_utt[i+2])] += 1
+        counter[(word_utt[-2], word_utt[-1], '<EOS>')] += 1
+        counter[(word_utt[-1], '<EOS>', '<EOS>')] += 1
+
+    num_pairs = len(counter)
+    print ('Total num of pairs: ', num_pairs)
+
+    for pair, counts in counter.items():
+        counter[pair] = math.log(counts/num_pairs)
+
+    if LM_file:
+        with open(LM_file, 'wb') as f:
+            pickle.dump(counter, f)
+
+    return counter
+
+
+def getNN(top_N, emb1, emb2, words):
+    start_time = time.time()
+    emb1 = emb1 / np.linalg.norm(emb1, axis=1, keepdims=True)
+    emb2 = emb2 / np.linalg.norm(emb2, axis=1, keepdims=True)
+    # [num_1 x num_2]
+    cos_sim = np.dot(emb1, emb2.T)
+
+    top_N_index = np.flip(np.argsort(cos_sim, axis=1), axis=1)[:, :top_N]
+    print (f'Time cost of getNN: {time.time() - start_time}')
+
+    return np.array([cos_sim[x, y] for x, y in zip(np.arange(len(cos_sim)), top_N_index)]), \
+        np.array([words[z] for z in top_N_index])
+
+
+def beam_search(sim_values, sim_words, LM_probs, width, weight_LM, result_file, n_grams=3):
+    '''
+    sim_values -> [n_utts x n_time_steps x n_log_values(from high to low)]
+    sim_words -> [n_utts x n_time_steps x n_words]
+    LM_probs -> {pair: log_prob}
+    '''
+    trans = []
+    with open(result_file, 'w') as f:
+        for u in tqdm(range(len(sim_values))):
+            paths = [(0., ['<BOS>', '<BOS>'])]
+
+            # Initial three time steps
+            probs_at_t = {}
+            for i, (v, w) in enumerate(zip(sim_values[u][0], sim_words[u][0])):
+                v = math.log(v)
+                temp_path_words = list(paths[0][1])
+                temp_path_words.append(w)
+                if not ('<BOS>', '<BOS>', w) in LM_probs:
+                    probs_at_t[v - 10000. + random.random()/10000] = temp_path_words
+                else:
+                    probs_at_t[v + \
+                               weight_LM * LM_probs[('<BOS>', '<BOS>', w)] + \
+                               random.random()/10000] = temp_path_words
+                    # probs_at_t[paths[j][0] + p] = temp_path_words
+            sorted_probs_at_t = sorted(probs_at_t.items(), key=lambda kv: kv[0], reverse=True)
+            paths = sorted_probs_at_t[:width]
+
+            # At each time step
+            for t in range(1, len(sim_values[u])):
+                probs_at_t = {}
+                # For each of previous K paths
+                for j in range(width):
+                    for i, (v, w) in enumerate(zip(sim_values[u][t], sim_words[u][t])):
+                        v = math.log(v)
+                        temp_path_words = list(paths[j][1])
+                        temp_path_words.append(w)
+                        if not (paths[j][1][-2], paths[j][1][-1], w) in LM_probs:
+                            probs_at_t[paths[j][0] + v - 10000. + random.random()/10000] = temp_path_words
+                        else:
+                            probs_at_t[paths[j][0] + v + \
+                                       weight_LM * LM_probs[(paths[j][1][-2], paths[j][1][-1], w)] + \
+                                       random.random()/10000] = temp_path_words
+                            # probs_at_t[paths[j][0] + p] = temp_path_words
+                sorted_probs_at_t = sorted(probs_at_t.items(), key=lambda kv: kv[0], reverse=True)
+                paths = sorted_probs_at_t[:width]
+                # print (paths[0])
+
+            # Last two time steps
+            for _ in range(2):
+                probs_at_t = {}
+                # For each of previous K paths
+                for j in range(width):
+                    temp_path_words = list(paths[j][1])
+                    temp_path_words.append('<EOS>')
+                    if not (paths[j][1][-2], paths[j][1][-1], '<EOS>') in LM_probs:
+                        probs_at_t[paths[j][0] + 0. - 10000. + random.random()/10000] = temp_path_words
+                    else:
+                        probs_at_t[paths[j][0] + 0. + \
+                                   weight_LM * LM_probs[(paths[j][1][-2], paths[j][1][-1], '<EOS>')] + \
+                                   random.random()/10000] = temp_path_words
+                        # probs_at_t[paths[j][0] + p] = temp_path_words
+                sorted_probs_at_t = sorted(probs_at_t.items(), key=lambda kv: kv[0], reverse=True)
+                paths = sorted_probs_at_t[:width]
+
+            prob = paths[0][0]
+            words = paths[0][1][2:-2]
+            f.write(' '.join(words) + '\n')
+            trans.extend(words)
+    return np.array(trans)

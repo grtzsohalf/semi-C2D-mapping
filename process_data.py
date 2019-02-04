@@ -8,7 +8,7 @@ from tqdm import tqdm
 from collections import Counter
 import random
 
-from utils import read_pkl, pad_sequence
+from utils import read_pkl, pad_sequence, count_LM
 
 import numpy as np
 import torch
@@ -38,13 +38,15 @@ class Speech:
         self.n_total_wrds = 0
         self.n_total_phns = 0
         # self.n_total_slbs = 0
+
         self.feat = []               # [num_of_wrds x num_of_frames x feat_dim]
         self.txt_feat = []           # [num_of_wrds x num_of_phns x txt_feat_dim]
-        self.phn_in_wrd_feat = []
+
         self.phn_meta = []           # [num_of_utts x num_of_phns x (phn, utt_idx, start_frame, end_frame)]
         self.wrd_meta = []           # [num_of_utts x num_of_wrds x (wrd, utt_idx, start_frame, end_frame)]
-        self.phn_in_wrd_meta = []
+        self.phn_wrd_meta = []    # [num_of_utts x num_of_wrds x ((wrd, phn_wrd), utt_idx, start_frame, end_frame)]
         # self.slb_meta = []           # [num_of_utts x num_of_slbs x (slb, utt_idx, start_frame, end_frame)]
+
         self.spk2utt_idx = {}
         self.utt_idx2spk = {}
         self.spk2wrd_idx = {}
@@ -55,11 +57,29 @@ class Speech:
         self.wrd2cnt = Counter()
         self.idx2wrd = {}
         self.n_wrds = 0
+        self.wrds = []
+
+        self.phn_wrd2idx = {}
+        self.phn_wrd2cnt = Counter()
+        self.idx2phn_wrd = {}
+        self.n_phn_wrds = 0
+        self.phn_wrds = []
+
 
         self.phn2idx = {'h#': 0}
+        self.n_phns = 1
+        with open('TIMIT_utils/phones.60-48-39.map.txt', 'r') as f:
+            for line in f:
+                phn = line.strip().split()[0]
+                if phn != 'h#':
+                    self.n_phns += 1
+                    self.phn2idx[phn] = self.n_phns-1
+        self.idx2phn = {}
+        for phn, idx in self.phn2idx.items():
+            self.idx2phn[idx] = phn
         self.phn2cnt = Counter()
-        self.idx2phn = {0: 'h#'}
-        self.n_phns = 1              # Count 'h#'
+
+        self.LM = None
 
         # self.slb2idx = {}
         # self.slb2cnt = Counter()
@@ -71,25 +91,28 @@ class Speech:
     # The full process for preparing the data.
     #
 
-    def make_phn_in_wrd(self, phn_data, wrd_data):
-        phn_in_wrd_data = []
+    def make_phn_wrd(self, phn_data, wrd_data):
+        phn_wrd_data = []
         for i, (wrd_utt, phn_utt) in enumerate(zip(wrd_data, phn_data)):
-            phn_in_wrd_utt = []
+            phn_wrd_utt = []
             for _ in range(len(wrd_utt)):
-                phn_in_wrd_utt.append([])
+                phn_wrd_utt.append([])
             for phn_tuple in phn_utt:
                 if phn_tuple[0] == 'h#':
                     continue
                 for j, wrd_tuple in enumerate(wrd_utt):
                     if phn_tuple[1] >= wrd_tuple[1] and phn_tuple[2] <= wrd_tuple[2]:
-                        phn_in_wrd_utt[j].append(phn_tuple[0])
-            phn_in_wrd_data.append(phn_in_wrd_utt)
+                        phn_wrd_utt[j].append(phn_tuple[0])
+            phn_wrd_data.append([tuple(w) for w in phn_wrd_utt])
+            # for phn_wrd in phn_wrd_utt:
+                # if phn_wrd == []:
+                    # print (i)
 
-        return phn_in_wrd_data
+        return phn_wrd_data
 
 
-    def make_one_hot_feat(self, phn_list):
-        phn_idx_array = np.array([self.phn2idx[phn]-1 for phn in phn_list])
+    def make_one_hot_feat(self, phn_tuple):
+        phn_idx_array = np.array([self.phn2idx[phn]-1 for phn in phn_tuple])
         f = np.zeros((len(phn_idx_array), self.n_phns-1))
         f[np.arange(len(phn_idx_array)), phn_idx_array] = 1.
         return f
@@ -101,13 +124,9 @@ class Speech:
         wrd_data = read_pkl(wrd_file)       # [num_of_utts x num_of_wrds x [wrd, start, end]]           
         # slb_data = read_pkl(slb_file)       # [num_of_utts x num_of_slbs x [slb, start, end]]           
 
-        phn_in_wrd_data = self.make_phn_in_wrd(phn_data, wrd_data)
-        print (sum([len(u) for u in phn_in_wrd_data]))
+        phn_wrd_data = self.make_phn_wrd(phn_data, wrd_data)
 
         self.n_utts = len(feat)
-        self.n_batches = self.n_utts // self.batch_size
-        if self.n_utts % self.batch_size != 0:
-            self.n_batches += 1
         print("Read %s utterances" % self.n_utts)
 
         for i, phn_utt in enumerate(phn_data):
@@ -115,16 +134,12 @@ class Speech:
             phn_meta_utt = []
             for j, (phn, phn_start, phn_end) in enumerate(phn_utt):
                 self.n_total_phns += 1
-                if not phn in self.phn2idx:
-                    self.phn2idx[phn] = self.n_phns
-                    self.idx2phn[self.n_phns] = phn
-                    self.n_phns += 1
                 self.phn2cnt[phn] += 1
                 phn_meta_utt.append((phn, i, phn_start, phn_end))
             self.phn_meta.append(phn_meta_utt)
 
-        for i, (utt, feat_utt, wrd_utt, phn_in_wrd_utt) \
-                in enumerate(zip(meta_data['prefix'], feat, wrd_data, phn_in_wrd_data)):
+        for i, (utt, feat_utt, wrd_utt, phn_wrd_utt) \
+                in enumerate(zip(meta_data['prefix'], feat, wrd_data, phn_wrd_data)):
             spk = utt.split('_')[1]
 
             if not spk in self.spk2utt_idx:
@@ -136,17 +151,22 @@ class Speech:
 
             # Process each wrd in utt
             wrd_meta_utt = []
-            for j, (wrd, wrd_start, wrd_end) in enumerate(wrd_utt):
+            phn_wrd_meta_utt = []
+            for j, ((wrd, wrd_start, wrd_end), phn_wrd) in enumerate(zip(wrd_utt, phn_wrd_utt)):
+                wrd = wrd.lower()
                 if j != 0 and wrd_start >= wrd_utt[j-1][1] and wrd_end <= wrd_utt[j-1][2]:
-                    print ('Words overlap:')
-                    print (i, j-1, j, wrd_utt[j-1], wrd_utt[j])
+                    # print ('Words overlap:')
+                    # print (i, j-1, j, wrd_utt[j-1], wrd_utt[j])
                     continue
                 if j != len(wrd_utt)-1 and wrd_start >= wrd_utt[j+1][1] and wrd_end <= wrd_utt[j+1][2]:
-                    print ('Words overlap:')
-                    print (i, j, j+1, wrd_utt[j], wrd_utt[j+1])
+                    # print ('Words overlap:')
+                    # print (i, j, j+1, wrd_utt[j], wrd_utt[j+1])
                     continue
                 if wrd_end - wrd_start == 0:
-                    print (i, wrd)
+                    # print (i, wrd)
+                    continue
+                if not len(phn_wrd):
+                    # print (i, j)
                     continue
                 self.n_total_wrds += 1
                 if not wrd in self.wrd2idx:
@@ -156,19 +176,20 @@ class Speech:
                 self.wrd2cnt[wrd] += 1
                 wrd_meta_utt.append((wrd, i, wrd_start, wrd_end))
 
+                if not (wrd, phn_wrd) in self.phn_wrd2idx:
+                    self.phn_wrd2idx[(wrd, phn_wrd)] = self.n_phn_wrds
+                    self.idx2phn_wrd[self.n_phn_wrds] = (wrd, phn_wrd)
+                    self.n_phn_wrds += 1
+                self.phn_wrd2cnt[(wrd, phn_wrd)] += 1
+                phn_wrd_meta_utt.append(((wrd, phn_wrd), i, wrd_start, wrd_end))
+
                 self.spk2wrd_idx[spk].append(self.n_total_wrds-1)
                 self.wrd_idx2spk[self.n_total_wrds-1] = spk
                 self.feat.append(feat[i][wrd_start:wrd_end])
-                try:
-                    self.txt_feat.append(self.make_one_hot_feat(phn_in_wrd_utt[j]))
-                except:
-                    print (i, j)
-                    print (len(phn_in_wrd_utt), len(wrd_utt))
-                    print (phn_in_wrd_utt)
-                    print (wrd_utt)
-                    exit()
+                self.txt_feat.append(self.make_one_hot_feat(phn_wrd))
 
             self.wrd_meta.append(wrd_meta_utt)
+            self.phn_wrd_meta.append(phn_wrd_meta_utt)
 
             # Process each slb in utt
             # slb_meta_utt = []
@@ -192,6 +213,19 @@ class Speech:
 
         self.feat = np.array(self.feat)
         self.txt_feat = np.array(self.txt_feat)
+        self.n_batches = len(self.feat) // self.batch_size
+        if len(self.feat) % self.batch_size != 0:
+            self.n_batches += 1
+
+        for wrd_meta_utt in self.wrd_meta:
+            self.wrds.extend([w[0] for w in wrd_meta_utt])
+        for phn_wrd_meta_utt in self.phn_wrd_meta:
+            self.phn_wrds.extend([w[0] for w in phn_wrd_meta_utt])
+
+        print ('Num of total words: ', len(self.feat), len(self.txt_feat), self.n_total_wrds)
+        print ('Num of distinct words (with different phonemes): ', self.n_phn_wrds)
+        print ('Num of distinct words: ', self.n_wrds)
+        print ('Num of batches: ', self.n_batches)
 
         return 
 
