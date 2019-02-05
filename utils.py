@@ -570,11 +570,11 @@ def beam_search(sim_values, sim_words, LM_probs, width, weight_LM, result_file, 
                         exit()
                     temp_path_words.append('<EOS>')
                     if not (paths[j][1][-2], paths[j][1][-1], '<EOS>') in LM_probs:
-                        probs_at_t((paths[j][0] + 0. - 10000. + random.random()/10000, temp_path_words))
+                        probs_at_t.append((paths[j][0] + 0. - 10000. + random.random()/10000, temp_path_words))
                     else:
-                        probs_at_t((paths[j][0] + 0. + \
-                                    weight_LM * LM_probs[(paths[j][1][-2], paths[j][1][-1], '<EOS>')] + \
-                                    random.random()/10000, temp_path_words))
+                        probs_at_t.append((paths[j][0] + 0. + \
+                                           weight_LM * LM_probs[(paths[j][1][-2], paths[j][1][-1], '<EOS>')] + \
+                                           random.random()/10000, temp_path_words))
                         # probs_at_t[paths[j][0] + p] = temp_path_words
                 sorted_probs_at_t = sorted(probs_at_t, key=lambda kv: kv[0], reverse=True)
                 paths = sorted_probs_at_t[:width]
