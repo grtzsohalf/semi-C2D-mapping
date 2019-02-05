@@ -23,8 +23,8 @@ from torch.optim.lr_scheduler import StepLR
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-WIDTH = 10
-WEIGHT_LM = 0.0
+WIDTH = 50
+WEIGHT_LM = 0.01
 
 
 ######################################################################

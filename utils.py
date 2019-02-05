@@ -562,7 +562,12 @@ def beam_search(sim_values, sim_words, LM_probs, width, weight_LM, result_file, 
                 probs_at_t = {}
                 # For each of previous K paths
                 for j in range(width):
-                    temp_path_words = list(paths[j][1])
+                    try:
+                        temp_path_words = list(paths[j][1])
+                    except:
+                        print (len(paths))
+                        print (paths)
+                        exit()
                     temp_path_words.append('<EOS>')
                     if not (paths[j][1][-2], paths[j][1][-1], '<EOS>') in LM_probs:
                         probs_at_t[paths[j][0] + 0. - 10000. + random.random()/10000] = temp_path_words
