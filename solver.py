@@ -311,8 +311,10 @@ class Solver:
                                   lr=self.init_lr, betas=(0.5, 0.9))
 
         for epoch in range(global_step+1, global_step+1+n_epochs):
+            start_time = time.time()
             print ('\nEpoch: ', epoch)
             # Train
+            print (' ')
             train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
                 train_neg_spk_loss, train_paired_loss, train_d_loss, train_gp_loss \
                 = self.compute(train_data, 'train', optimizer_D=optimizer_D, optimizer_G=optimizer_G)
@@ -344,6 +346,7 @@ class Solver:
                                                        os.path.join(result_dir, f'acc_train_{WIDTH}_{WEIGHT_LM}.txt'))
 
             # Evaluate for eval data
+            print (' ')
             eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
                 eval_neg_spk_loss, eval_paired_loss, eval_d_loss, eval_gp_loss \
                 = self.compute(test_data, 'test', result_file=os.path.join(result_dir, f'result_test_{epoch}.pkl'))
@@ -380,6 +383,8 @@ class Solver:
             name = 'epoch_'+str(epoch)
             saver.save(state, name)
 
+            print (time.time() - start_time, '\n')
+
 
     ######################################################################
     # The whole evaluation process
@@ -388,6 +393,7 @@ class Solver:
 
     def evaluate(self, test_data, train_data, result_dir, print_every=1):
         # Evaluate for train data
+        print (' ')
         train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
             train_neg_spk_loss, train_paired_loss, train_d_loss, train_gp_loss \
             = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train.pkl'))
@@ -403,6 +409,7 @@ class Solver:
                                                    None)
 
         # Evaluate for test data
+        print (' ')
         eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
             eval_neg_spk_loss, eval_paired_loss, eval_d_loss, eval_gp_loss \
             = self.compute(test_data, 'test', result_file=os.path.join(result_dir, 'result_test.pkl'))
