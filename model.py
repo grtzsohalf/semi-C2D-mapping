@@ -154,7 +154,8 @@ class A2VwD(nn.Module):
         # construct decoder hiddens
         target_concat_hiddens = torch.cat((phn_hiddens[:batch_size, :, :], spk_hiddens[:batch_size, :, :]), -1).transpose(0, 1)
         state_zeros = torch.zeros_like(target_concat_hiddens, device=device) 
-        decoder_init_state = torch.tensor(target_concat_hiddens, device=device)
+        # decoder_init_state = torch.tensor(target_concat_hiddens, device=device)
+        decoder_init_state = target_concat_hiddens.clone()
         for i in range(self.decoder_num_layers-1):
             decoder_init_state = torch.cat((decoder_init_state, state_zeros), 0)
 
@@ -202,7 +203,8 @@ class A2V(nn.Module):
 
         # construct decoder hiddens
         state_zeros = torch.zeros_like(hiddens[:batch_size, :, :].transpose(0, 1), device=device) 
-        decoder_init_state = torch.tensor(hiddens[:batch_size, :, :].transpose(0, 1), device=device)
+        # decoder_init_state = torch.tensor(hiddens[:batch_size, :, :].transpose(0, 1), device=device)
+        decoder_init_state = hiddens[:batch_size, :, :].transpose(0, 1).clone()
         for i in range(self.decoder_num_layers-1):
             decoder_init_state = torch.cat((decoder_init_state, state_zeros), 0)
 
