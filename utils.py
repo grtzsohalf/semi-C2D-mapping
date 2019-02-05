@@ -522,24 +522,24 @@ def beam_search(sim_values, sim_words, LM_probs, width, weight_LM, result_file, 
             paths = [(0., ['<BOS>', '<BOS>'])]
 
             # Initial three time steps
-            probs_at_t = {}
+            probs_at_t = []
             for i, (v, w) in enumerate(zip(sim_values[u][0], sim_words[u][0])):
                 v = math.log(v)
                 temp_path_words = list(paths[0][1])
                 temp_path_words.append(w)
                 if not ('<BOS>', '<BOS>', w) in LM_probs:
-                    probs_at_t[v - 10000. + random.random()/10000] = temp_path_words
+                    probs_at_t.append((v - 10000. + random.random()/10000, temp_path_words))
                 else:
-                    probs_at_t[v + \
-                               weight_LM * LM_probs[('<BOS>', '<BOS>', w)] + \
-                               random.random()/10000] = temp_path_words
+                    probs_at_t.append((v + \
+                                       weight_LM * LM_probs[('<BOS>', '<BOS>', w)] + \
+                                       random.random()/10000, temp_path_words))
                     # probs_at_t[paths[j][0] + p] = temp_path_words
-            sorted_probs_at_t = sorted(probs_at_t.items(), key=lambda kv: kv[0], reverse=True)
+            sorted_probs_at_t = sorted(probs_at_t, key=lambda kv: kv[0], reverse=True)
             paths = sorted_probs_at_t[:width]
 
             # At each time step
             for t in range(1, len(sim_values[u])):
-                probs_at_t = {}
+                probs_at_t = []
                 # For each of previous K paths
                 for j in range(width):
                     for i, (v, w) in enumerate(zip(sim_values[u][t], sim_words[u][t])):
@@ -547,11 +547,11 @@ def beam_search(sim_values, sim_words, LM_probs, width, weight_LM, result_file, 
                         temp_path_words = list(paths[j][1])
                         temp_path_words.append(w)
                         if not (paths[j][1][-2], paths[j][1][-1], w) in LM_probs:
-                            probs_at_t[paths[j][0] + v - 10000. + random.random()/10000] = temp_path_words
+                            probs_at_t.append((paths[j][0] + v - 10000. + random.random()/10000, temp_path_words))
                         else:
-                            probs_at_t[paths[j][0] + v + \
-                                       weight_LM * LM_probs[(paths[j][1][-2], paths[j][1][-1], w)] + \
-                                       random.random()/10000] = temp_path_words
+                            probs_at_t.append((paths[j][0] + v + \
+                                               weight_LM * LM_probs[(paths[j][1][-2], paths[j][1][-1], w)] + \
+                                               random.random()/10000, temp_path_words))
                             # probs_at_t[paths[j][0] + p] = temp_path_words
                 sorted_probs_at_t = sorted(probs_at_t.items(), key=lambda kv: kv[0], reverse=True)
                 paths = sorted_probs_at_t[:width]
@@ -559,7 +559,7 @@ def beam_search(sim_values, sim_words, LM_probs, width, weight_LM, result_file, 
 
             # Last two time steps
             for _ in range(2):
-                probs_at_t = {}
+                probs_at_t = []
                 # For each of previous K paths
                 for j in range(width):
                     try:
@@ -570,11 +570,11 @@ def beam_search(sim_values, sim_words, LM_probs, width, weight_LM, result_file, 
                         exit()
                     temp_path_words.append('<EOS>')
                     if not (paths[j][1][-2], paths[j][1][-1], '<EOS>') in LM_probs:
-                        probs_at_t[paths[j][0] + 0. - 10000. + random.random()/10000] = temp_path_words
+                        probs_at_t((paths[j][0] + 0. - 10000. + random.random()/10000, temp_path_words))
                     else:
-                        probs_at_t[paths[j][0] + 0. + \
-                                   weight_LM * LM_probs[(paths[j][1][-2], paths[j][1][-1], '<EOS>')] + \
-                                   random.random()/10000] = temp_path_words
+                        probs_at_t((paths[j][0] + 0. + \
+                                    weight_LM * LM_probs[(paths[j][1][-2], paths[j][1][-1], '<EOS>')] + \
+                                    random.random()/10000, temp_path_words))
                         # probs_at_t[paths[j][0] + p] = temp_path_words
                 sorted_probs_at_t = sorted(probs_at_t.items(), key=lambda kv: kv[0], reverse=True)
                 paths = sorted_probs_at_t[:width]
