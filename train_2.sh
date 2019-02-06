@@ -13,7 +13,7 @@ device_id=$1
 num_paired=$2
 n_epochs=$3
 
-init_lr=0.0001
+init_lr=0.0005
 batch_size=32
 seq_len=165
 feat_dim=39
@@ -34,7 +34,7 @@ weight_d=1.
 weight_gp=1.
 
 width=20
-weight_LM=1.
+weight_LM=0.1
 
 mkdir -p $exp_dir
 

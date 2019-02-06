@@ -34,7 +34,7 @@ weight_neg_paired=10.
 weight_d=1.
 weight_gp=1.
 
-width=10
+width=20
 weight_LM=0.1
 
 mkdir -p $exp_dir
