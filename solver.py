@@ -154,6 +154,9 @@ class Solver:
         total_d_loss = 0
         total_gp_loss = 0
 
+        total_phn_hiddens = np.array([])
+        total_txt_hiddens = np.array([])
+
         total_indices = np.arange(data.n_total_wrds)
         if mode == 'train':
             np.random.shuffle(total_indices)
@@ -225,6 +228,13 @@ class Solver:
                            spk_hiddens.cpu().detach().numpy(), 
                            txt_hiddens.cpu().detach().numpy()], 
                           result_file)
+            if mode == 'test':
+                if total_phn_hiddens.size:
+                    total_phn_hiddens = np.concatenate((total_phn_hiddens, phn_hiddens.cpu().detach().numpy()), axis=0)
+                    total_txt_hiddens = np.concatenate((total_txt_hiddens, txt_hiddens.cpu().detach().numpy()), axis=0)
+                else:
+                    total_phn_hiddens = phn_hiddens.cpu().detach().numpy()
+                    total_txt_hiddens = txt_hiddens.cpu().detach().numpy()
 
             total_G_losses += G_losses.item()
             total_D_losses += D_losses.item()
@@ -243,53 +253,18 @@ class Solver:
         return total_G_losses/data.n_batches, total_D_losses/data.n_batches, total_r_loss/data.n_batches, \
             total_txt_r_loss/data.n_batches, total_g_loss/data.n_batches, total_pos_spk_loss/data.n_batches, \
             total_neg_spk_loss/data.n_batches, total_pos_paired_loss/data.n_batches, total_neg_paired_loss/data.n_batches, \
-            total_d_loss/data.n_batches, total_gp_loss/data.n_batches
+            total_d_loss/data.n_batches, total_gp_loss/data.n_batches, total_phn_hiddens, total_txt_hiddens
 
 
     ######################################################################
     # The scoring function:
     #
 
-    def score(self, data, result_file, trans_file, acc_file=None, use_train=False, train_txt_hiddens=None, train_wrds=None):
-        phn_hiddens = np.array([])
-        if not use_train:
-            txt_hiddens = np.array([])
-        with open(result_file, 'rb') as f:
-            while True:
-                try:
-                    hiddens = pickle.load(f)
-                    phn = hiddens[0]
-                    if not use_train:
-                        txt = hiddens[2]
-                    if phn_hiddens.size:
-                        phn_hiddens = np.concatenate((phn_hiddens, phn), axis=0)
-                        if not use_train:
-                            txt_hiddens = np.concatenate((txt_hiddens, txt), axis=0)
-                    else:
-                        phn_hiddens = phn
-                        if not use_train:
-                            txt_hiddens = txt
-                except EOFError:
-                    break
-
-        # 
-        if not use_train:
-            unique_txt_hiddens = []
-            unique_phn_wrds = []
-            for phn_wrd, hidden in zip(data.phn_wrds, txt_hiddens):
-                if not phn_wrd in unique_phn_wrds:
-                    unique_phn_wrds.append(phn_wrd)
-                    unique_txt_hiddens.append(hidden)
-            unique_txt_hiddens = np.array(unique_txt_hiddens)
-            unique_wrds = np.array([w[0] for w in unique_phn_wrds])
-        else:
-            unique_txt_hiddens = train_txt_hiddens
-            unique_wrds = train_wrds
-
+    def score(self, data, phn_hiddens, txt_hiddens, wrds, trans_file, acc_file=None):
         print (phn_hiddens.shape)
-        print (unique_txt_hiddens.shape)
+        print (txt_hiddens.shape)
 
-        sim_values, sim_wrds = getNN(200, phn_hiddens, unique_txt_hiddens, unique_wrds)
+        sim_values, sim_wrds = getNN(200, phn_hiddens, txt_hiddens, wrds)
         utt_lens = [len(u) for u in data.wrd_meta]
         print (sum(utt_lens), len(sim_values), len(sim_wrds))
         start = 0
@@ -313,7 +288,7 @@ class Solver:
             with open(acc_file,'a') as f:
                 f.write(str(acc / len(trans))+'\n')
 
-        return unique_txt_hiddens, unique_wrds
+        return
 
 
     ######################################################################
@@ -356,18 +331,28 @@ class Solver:
 
             # Evaluate for train data
             train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
-                train_neg_spk_loss, train_pos_paired_loss, train_neg_paired_loss, train_d_loss, train_gp_loss \
+                train_neg_spk_loss, train_pos_paired_loss, train_neg_paired_loss, train_d_loss, train_gp_loss, \
+                train_phn_hiddens, train_txt_hiddens \
                 = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train_{epoch}.pkl'))
         
-            train_txt_hiddens, train_wrds = self.score(train_data,
-                                                       os.path.join(result_dir, f'result_train_{epoch}.pkl'), 
-                                                       os.path.join(result_dir, f'trans_train_{epoch}_{self.width}_{self.weight_LM}.txt'),
-                                                       os.path.join(result_dir, f'acc_train_{self.width}_{self.weight_LM}.txt'))
+            unique_train_txt_hiddens = []
+            unique_train_phn_wrds = []
+            for phn_wrd, hidden in zip(train_data.phn_wrds, train_txt_hiddens):
+                if not phn_wrd in unique_train_phn_wrds:
+                    unique_train_phn_wrds.append(phn_wrd)
+                    unique_train_txt_hiddens.append(hidden)
+            unique_train_txt_hiddens = np.array(unique_train_txt_hiddens)
+            unique_train_wrds = np.array([w[0] for w in unique_train_phn_wrds])
+
+            self.score(train_data, train_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
+                       os.path.join(result_dir, f'trans_train_{epoch}_{self.width}_{self.weight_LM}.txt'),
+                       os.path.join(result_dir, f'acc_train_{self.width}_{self.weight_LM}.txt'))
 
             # Evaluate for eval data
             print (' ')
             eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
-                eval_neg_spk_loss, eval_pos_paired_loss, eval_neg_paired_loss, eval_d_loss, eval_gp_loss \
+                eval_neg_spk_loss, eval_pos_paired_loss, eval_neg_paired_loss, eval_d_loss, eval_gp_loss, \
+                eval_phn_hiddens, _ \
                 = self.compute(test_data, 'test', result_file=os.path.join(result_dir, f'result_test_{epoch}.pkl'))
         
             self.logger.scalar_summary('eval_losses/G_losses', eval_G_losses, epoch)
@@ -388,11 +373,9 @@ class Solver:
                    '\npos_paired_loss: ', eval_pos_paired_loss, '\nneg_paired_loss: ', eval_neg_paired_loss, 
                    '\nd_loss:          ', eval_d_loss, '\ngp_loss:         ', eval_gp_loss)
 
-            _, _ = self.score(test_data, 
-                              os.path.join(result_dir, f'result_test_{epoch}.pkl'), 
-                              os.path.join(result_dir, f'trans_test_{epoch}_{self.width}_{self.weight_LM}.txt'),
-                              os.path.join(result_dir, f'acc_test_{self.width}_{self.weight_LM}.txt'),
-                              True, train_txt_hiddens, train_wrds)
+            self.score(test_data, eval_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
+                       os.path.join(result_dir, f'trans_test_{epoch}_{self.width}_{self.weight_LM}.txt'),
+                       os.path.join(result_dir, f'acc_test_{self.width}_{self.weight_LM}.txt'))
 
             # Save model
             state = {
@@ -416,7 +399,8 @@ class Solver:
         # Evaluate for train data
         print (' ')
         train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
-            train_neg_spk_loss, train_pos_paired_loss, train_neg_paired_loss, train_d_loss, train_gp_loss \
+            train_neg_spk_loss, train_pos_paired_loss, train_neg_paired_loss, train_d_loss, train_gp_loss, \
+            train_phn_hiddens, train_txt_hiddens \
             = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train.pkl'))
 
         print ('Train -----> G_losses: ',train_G_losses, ' D_losses: ', train_D_losses, 
@@ -424,16 +408,24 @@ class Solver:
                '\npos_spk_loss:    ', train_pos_spk_loss, '\nneg_spk_loss:    ', train_neg_spk_loss, 
                '\npos_paired_loss: ', train_pos_paired_loss, '\nneg_paired_loss: ', train_neg_paired_loss, 
                '\nd_loss:          ', train_d_loss, '\ngp_loss:         ', train_gp_loss)
+    
+        unique_train_txt_hiddens = []
+        unique_train_phn_wrds = []
+        for phn_wrd, hidden in zip(train_data.phn_wrds, train_txt_hiddens):
+            if not phn_wrd in unique_train_phn_wrds:
+                unique_train_phn_wrds.append(phn_wrd)
+                unique_train_txt_hiddens.append(hidden)
+        unique_train_txt_hiddens = np.array(unique_train_txt_hiddens)
+        unique_train_wrds = np.array([w[0] for w in unique_train_phn_wrds])
 
-        train_txt_hiddens, train_wrds = self.score(train_data, 
-                                                   os.path.join(result_dir, f'result_train.pkl'), 
-                                                   os.path.join(result_dir, f'trans_train_{self.width}_{self.weight_LM}.txt'),
-                                                   None)
+        self.score(train_data, train_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
+                   os.path.join(result_dir, f'trans_train_{self.width}_{self.weight_LM}.txt'))
 
         # Evaluate for test data
         print (' ')
         eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
-            eval_neg_spk_loss, eval_pos_paired_loss, eval_neg_paired_loss, eval_d_loss, eval_gp_loss \
+            eval_neg_spk_loss, eval_pos_paired_loss, eval_neg_paired_loss, eval_d_loss, eval_gp_loss, \
+            eval_phn_hiddens, _ \
             = self.compute(test_data, 'test', result_file=os.path.join(result_dir, 'result_test.pkl'))
 
         print ('Eval -----> G_losses: ',eval_G_losses, ' D_losses: ', eval_D_losses, 
@@ -442,8 +434,5 @@ class Solver:
                '\npos_paired_loss: ', eval_pos_paired_loss, '\nneg_paired_loss: ', eval_neg_paired_loss, 
                '\nd_loss:          ', eval_d_loss, '\ngp_loss:         ', eval_gp_loss)
 
-        _, _ = self.score(test_data, 
-                          os.path.join(result_dir, f'result_test.pkl'), 
-                          os.path.join(result_dir, f'trans_test_{self.width}_{self.weight_LM}.txt'),
-                          None,
-                          True, train_txt_hiddens, train_wrds)
+        self.score(test_data, eval_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
+                   os.path.join(result_dir, f'trans_test_{self.width}_{self.weight_LM}.txt'))
