@@ -13,7 +13,7 @@ device_id=$1
 num_paired=$2
 n_epochs=$3
 
-init_lr=0.0005
+init_lr=0.0001
 batch_size=32
 seq_len=165
 feat_dim=39
@@ -21,19 +21,26 @@ hidden_dim=256
 enc_num_layers=2
 dec_num_layers=2
 D_num_layers=3
-dropout_rate=0.1
+dropout_rate=0.3
 iter_d=3
-#chunk_size=1
-#pred_step=12
-#pred_neg_num=8
-#AR_scale=1.
-#TAR_scale=1.
+
+weight_r=0.1
+weight_txt_r=1.
+weight_g=1.
+weight_pos_spk=1.
+weight_neg_spk=1.
+weight_paired=10.
+weight_d=1.
+weight_gp=1.
+
+width=20
+weight_LM=0.1
 
 mkdir -p $exp_dir
 
-model_dir=$exp_dir/model_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}
-log_dir=$exp_dir/log_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}
-result_dir=$exp_dir/result_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}
+model_dir=$exp_dir/model_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_paired}_${weight_d}_${weight_gp}
+log_dir=$exp_dir/log_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_paired}_${weight_d}_${weight_gp}
+result_dir=$exp_dir/result_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_paired}_${weight_d}_${weight_gp}
 
 mkdir -p $model_dir
 mkdir -p $log_dir
@@ -64,7 +71,8 @@ mode=train
 
 python3 $path/main.py --init_lr=$init_lr --batch_size=$batch_size --seq_len=$seq_len --feat_dim=$feat_dim --p_hidden_dim=$hidden_dim \
   --phn_num_layers=$enc_num_layers --dec_num_layers=$dec_num_layers --D_num_layers=$D_num_layers --dropout_rate=$dropout_rate \
-  --iter_d=$iter_d --n_epochs=$n_epochs \
+  --iter_d=$iter_d --weight_r=$weight_r --weight_txt_r=$weight_txt_r --weight_g=$weight_g --weight_pos_spk=$weight_pos_spk \
+  --weight_neg_spk=$weight_neg_spk --weight_paired=$weight_paired --weight_d=$weight_d --weight_gp=$weight_gp --n_epochs=$n_epochs \
   $train_meta_pkl $train_mfcc_pkl $train_phn_pkl $train_wrd_pkl $train_slb_pkl \
   $test_meta_pkl $test_mfcc_pkl $test_phn_pkl $test_wrd_pkl $test_slb_pkl \
   $log_dir $model_dir $result_dir $mode $num_paired
