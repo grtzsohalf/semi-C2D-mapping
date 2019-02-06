@@ -35,9 +35,9 @@ weight_gp=1.
 width=10
 weight_LM=0.
 
-model_dir=$exp_dir/model_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
-log_dir=$exp_dir/log_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
-result_dir=$exp_dir/result_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
+model_dir=$exp_dir/model_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
+log_dir=$exp_dir/log_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
+result_dir=$exp_dir/result_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
 
 train_meta_pkl=$feat_dir/processed/timit-train-meta.pkl       # {'prefix': [4620 x drID_spkID_uttID]}
 train_mfcc_pkl=$feat_dir/processed/timit-train-mfcc-nor.pkl   # [4620 x num_of_frames x 39]

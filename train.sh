@@ -13,7 +13,7 @@ device_id=$1
 num_paired=$2
 n_epochs=$3
 
-init_lr=0.0001
+init_lr=0.0005
 batch_size=32
 seq_len=165
 feat_dim=39
@@ -39,9 +39,9 @@ weight_LM=0.
 
 mkdir -p $exp_dir
 
-model_dir=$exp_dir/model_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
-log_dir=$exp_dir/log_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
-result_dir=$exp_dir/result_${init_lr}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
+model_dir=$exp_dir/model_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
+log_dir=$exp_dir/log_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
+result_dir=$exp_dir/result_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${D_num_layers}_${dropout_rate}_${iter_d}_${weight_r}_${weight_txt_r}_${weight_g}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${weight_d}_${weight_gp}
 
 mkdir -p $model_dir
 mkdir -p $log_dir
