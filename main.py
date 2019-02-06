@@ -64,21 +64,39 @@ def add_parser():
     parser.add_argument('--iter_d',type=int, default=3,
         metavar='--<num_iterations of D while updating G once>',
         help='num_iterations of D while updating G once')
-    # parser.add_argument('--chunk_size',type=int, default=16,
-        # metavar='--<size of each chunk in ONLSTM>',
-        # help='size of each chunk in ONLSTM')
-    # parser.add_argument('--pred_step',type=int, default=12,
-        # metavar='--<# of prediction steps in CPC>',
-        # help='The number of prediction steps in CPC')
-    # parser.add_argument('--pred_neg_num',type=int, default=8,
-        # metavar='--<# of prediction negative samples in NCE loss of CPC>',
-        # help='The number of prediction negative samples in NCE loss of CPC')
-    # parser.add_argument('--AR_scale',type=float, default=1.,
-        # metavar='--<scale of Acivation Regularization>',
-        # help='scale of Acivation Regularization')
-    # parser.add_argument('--TAR_scale',type=float, default=1.,
-        # metavar='--<scale of Temporal Acivation Regularization>',
-        # help='scale of Temporal Acivation Regularization')
+
+    parser.add_argument('--weight_r',type=float, default=1.,
+        metavar='--<weight of r_loss>',
+        help='weight of r_loss')
+    parser.add_argument('--weight_txt_r',type=float, default=1.,
+        metavar='--<weight of txt_r_loss>',
+        help='weight of txt_r_loss')
+    parser.add_argument('--weight_g',type=float, default=1.,
+        metavar='--<weight of g_loss>',
+        help='weight of g_loss')
+    parser.add_argument('--weight_pos_spk',type=float, default=1.,
+        metavar='--<weight of pos_spk_loss>',
+        help='weight of pos_spk_loss')
+    parser.add_argument('--weight_neg_spk',type=float, default=1.,
+        metavar='--<weight of neg_spk_loss>',
+        help='weight of neg_spk_loss')
+    parser.add_argument('--weight_paired',type=float, default=1.,
+        metavar='--<weight of paired_loss>',
+        help='weight of paired_loss')
+    parser.add_argument('--weight_d',type=float, default=1.,
+        metavar='--<weight of d_loss>',
+        help='weight of d_loss')
+    parser.add_argument('--weight_gp',type=float, default=1.,
+        metavar='--<weight of gp_loss>',
+        help='weight of gp_loss')
+
+    parser.add_argument('--width',type=int, default=10,
+        metavar='--<beam width>',
+        help='beam width')
+    parser.add_argument('--weight_LM',type=float, default=1.,
+        metavar='--<weight of LM scores>',
+        help='weight of LM_scores')
+
     parser.add_argument('--n_epochs',type=int, default=20,
         metavar='--<# of epochs for training>',
         help='The number of epochs for training')
@@ -163,7 +181,9 @@ if __name__ == '__main__':
 
     solver = Solver(FLAG.init_lr, FLAG.batch_size, FLAG.seq_len, FLAG.feat_dim, FLAG.p_hidden_dim,
                     FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.D_num_layers, FLAG.dropout_rate, 
-                    FLAG.iter_d, FLAG.log_dir, FLAG.mode)
+                    FLAG.iter_d, FLAG.weight_r, FLAG.weight_txt_r, FLAG.weight_g, FLAG.weight_pos_spk,
+                    FLAG.weight_neg_spk, FLAG.weight_paired, FLAG.weight_d, FLAG.weight_gp,
+                    FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode)
     solver.build_model()
     print ("Solver constructed!")
 

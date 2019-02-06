@@ -23,10 +23,6 @@ from torch.optim.lr_scheduler import StepLR
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-WIDTH = 50
-WEIGHT_LM = 0.01
-
-
 ######################################################################
 # Solver
 # ======
@@ -37,7 +33,9 @@ WEIGHT_LM = 0.01
 class Solver:
     def __init__(self, init_lr, batch_size, seq_len, feat_dim, hidden_dim, 
                  enc_num_layers, dec_num_layers, D_num_layers, dropout_rate, 
-                 iter_d, log_dir, mode):
+                 iter_d, weight_r, weight_txt_r, weight_g, weight_pos_spk,
+                 weight_neg_spk, weight_paired, weight_d, weight_gp, 
+                 width, weight_LM, log_dir, mode):
 
         self.init_lr = init_lr
         self.batch_size = batch_size
@@ -49,6 +47,18 @@ class Solver:
         self.D_num_layers = D_num_layers
         self.dropout_rate = dropout_rate
         self.iter_d = iter_d
+
+        self.weight_r = weight_r
+        self.weight_txt_r = weight_txt_r
+        self.weight_g = weight_g
+        self.weight_pos_spk = weight_pos_spk
+        self.weight_neg_spk = weight_neg_spk
+        self.weight_paired = weight_paired
+        self.weight_d = weight_d
+        self.weight_gp = weight_gp
+
+        self.width = width
+        self.weight_LM = weight_LM
 
         self.mode = mode
         if self.mode == 'train':
@@ -176,7 +186,7 @@ class Solver:
                         gp_loss, pos_spk_loss, neg_spk_loss, paired_loss \
                         = self.model(batch_size, batch_data, batch_length, batch_order, 
                                      batch_txt, batch_txt_length, batch_txt_order, 'train')
-                    D_losses = d_loss + 10 * gp_loss
+                    D_losses = self.weight_d * d_loss + self.weight_gp * gp_loss
                     D_losses.backward()
                     optimizer_D.step()
 
@@ -193,7 +203,8 @@ class Solver:
                         gp_loss, pos_spk_loss, neg_spk_loss, paired_loss \
                         = self.model(batch_size, batch_data, batch_length, batch_order, 
                                      batch_txt, batch_txt_length, batch_txt_order, 'train') 
-                G_losses = r_loss + txt_r_loss + g_loss + pos_spk_loss + neg_spk_loss + paired_loss
+                G_losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss + self.weight_g * g_loss \
+                    + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss + self.weight_paired * paired_loss
                 G_losses.backward()
                 optimizer_G.step()
             else:
@@ -201,8 +212,9 @@ class Solver:
                         gp_loss, pos_spk_loss, neg_spk_loss, paired_loss \
                         = self.model(batch_size, batch_data, batch_length, batch_order, 
                                      batch_txt, batch_txt_length, batch_txt_order, 'test') 
-                D_losses = d_loss + 10 * gp_loss
-                G_losses = r_loss + txt_r_loss + g_loss + pos_spk_loss + neg_spk_loss + paired_loss
+                D_losses = self.weight_d * d_loss + self.weight_gp * gp_loss
+                G_losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss + self.weight_g * g_loss \
+                    + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss + self.weight_paired * paired_loss
 
             if mode == 'test' and result_file:
                 write_pkl([phn_hiddens.cpu().detach().numpy(), 
@@ -285,7 +297,7 @@ class Solver:
         # sim_value_utts = [sim_values[:utt_lens[0]]]
         # sim_word_utts = [sim_words[:utt_lens[0]]]
 
-        trans = beam_search(sim_value_utts, sim_wrd_utts, data.LM, WIDTH, WEIGHT_LM, trans_file)
+        trans = beam_search(sim_value_utts, sim_wrd_utts, data.LM, self.width, self.weight_LM, trans_file)
 
         acc = 0
         for w1, w2 in zip(trans, data.wrds):
@@ -342,8 +354,8 @@ class Solver:
         
             train_txt_hiddens, train_wrds = self.score(train_data,
                                                        os.path.join(result_dir, f'result_train_{epoch}.pkl'), 
-                                                       os.path.join(result_dir, f'trans_train_{epoch}_{WIDTH}_{WEIGHT_LM}.txt'),
-                                                       os.path.join(result_dir, f'acc_train_{WIDTH}_{WEIGHT_LM}.txt'))
+                                                       os.path.join(result_dir, f'trans_train_{epoch}_{self.width}_{self.weight_LM}.txt'),
+                                                       os.path.join(result_dir, f'acc_train_{self.width}_{self.weight_LM}.txt'))
 
             # Evaluate for eval data
             print (' ')
@@ -369,8 +381,8 @@ class Solver:
 
             _, _ = self.score(test_data, 
                               os.path.join(result_dir, f'result_test_{epoch}.pkl'), 
-                              os.path.join(result_dir, f'trans_test_{epoch}_{WIDTH}_{WEIGHT_LM}.txt'),
-                              os.path.join(result_dir, f'acc_test_{WIDTH}_{WEIGHT_LM}.txt'),
+                              os.path.join(result_dir, f'trans_test_{epoch}_{self.width}_{self.weight_LM}.txt'),
+                              os.path.join(result_dir, f'acc_test_{self.width}_{self.weight_LM}.txt'),
                               True, train_txt_hiddens, train_wrds)
 
             # Save model
@@ -405,7 +417,7 @@ class Solver:
 
         train_txt_hiddens, train_wrds = self.score(train_data, 
                                                    os.path.join(result_dir, f'result_train.pkl'), 
-                                                   os.path.join(result_dir, f'trans_train_{WIDTH}_{WEIGHT_LM}.txt'),
+                                                   os.path.join(result_dir, f'trans_train_{self.width}_{self.weight_LM}.txt'),
                                                    None)
 
         # Evaluate for test data
@@ -421,6 +433,6 @@ class Solver:
 
         _, _ = self.score(test_data, 
                           os.path.join(result_dir, f'result_test.pkl'), 
-                          os.path.join(result_dir, f'trans_test_{WIDTH}_{WEIGHT_LM}.txt'),
+                          os.path.join(result_dir, f'trans_test_{self.width}_{self.weight_LM}.txt'),
                           None,
                           True, train_txt_hiddens, train_wrds)
