@@ -308,7 +308,8 @@ class Solver:
             # Train
             print (' ')
             train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
-                train_neg_spk_loss, train_pos_paired_loss, train_neg_paired_loss, train_d_loss, train_gp_loss \
+                train_neg_spk_loss, train_pos_paired_loss, train_neg_paired_loss, train_d_loss, train_gp_loss, \
+                _, _ \
                 = self.compute(train_data, 'train', optimizer_D=optimizer_D, optimizer_G=optimizer_G)
         
             self.logger.scalar_summary('train_losses/G_losses', train_G_losses, epoch)
