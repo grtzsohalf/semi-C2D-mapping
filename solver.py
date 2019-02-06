@@ -333,7 +333,7 @@ class Solver:
             train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
                 train_neg_spk_loss, train_pos_paired_loss, train_neg_paired_loss, train_d_loss, train_gp_loss, \
                 train_phn_hiddens, train_txt_hiddens \
-                = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train_{epoch}.pkl'))
+                = self.compute(train_data, 'test')#, result_file=os.path.join(result_dir, f'result_train_{epoch}.pkl'))
         
             unique_train_txt_hiddens = []
             unique_train_phn_wrds = []
@@ -353,7 +353,7 @@ class Solver:
             eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
                 eval_neg_spk_loss, eval_pos_paired_loss, eval_neg_paired_loss, eval_d_loss, eval_gp_loss, \
                 eval_phn_hiddens, _ \
-                = self.compute(test_data, 'test', result_file=os.path.join(result_dir, f'result_test_{epoch}.pkl'))
+                = self.compute(test_data, 'test')#, result_file=os.path.join(result_dir, f'result_test_{epoch}.pkl'))
         
             self.logger.scalar_summary('eval_losses/G_losses', eval_G_losses, epoch)
             self.logger.scalar_summary('eval_losses/D_losses', eval_D_losses, epoch)
@@ -401,7 +401,7 @@ class Solver:
         train_G_losses, train_D_losses, train_r_loss, train_txt_r_loss, train_g_loss, train_pos_spk_loss, \
             train_neg_spk_loss, train_pos_paired_loss, train_neg_paired_loss, train_d_loss, train_gp_loss, \
             train_phn_hiddens, train_txt_hiddens \
-            = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train.pkl'))
+            = self.compute(train_data, 'test')#, result_file=os.path.join(result_dir, f'result_train.pkl'))
 
         print ('Train -----> G_losses: ',train_G_losses, ' D_losses: ', train_D_losses, 
                '\nr_loss:          ', train_r_loss, '\ntxt_r_loss:      ', train_txt_r_loss, '\ng_loss:          ',train_g_loss, 
@@ -426,7 +426,7 @@ class Solver:
         eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_r_loss, eval_g_loss, eval_pos_spk_loss, \
             eval_neg_spk_loss, eval_pos_paired_loss, eval_neg_paired_loss, eval_d_loss, eval_gp_loss, \
             eval_phn_hiddens, _ \
-            = self.compute(test_data, 'test', result_file=os.path.join(result_dir, 'result_test.pkl'))
+            = self.compute(test_data, 'test')#, result_file=os.path.join(result_dir, 'result_test.pkl'))
 
         print ('Eval -----> G_losses: ',eval_G_losses, ' D_losses: ', eval_D_losses, 
                '\nr_loss:          ', eval_r_loss, '\ntxt_r_loss:      ', eval_txt_r_loss, '\ng_loss:          ',eval_g_loss, 

@@ -567,7 +567,7 @@ def beam_search(sim_values, sim_words, LM_probs, width, weight_LM, result_file, 
                             if not (paths[j][1][-2], paths[j][1][-1], w) in LM_probs:
                                 probs_at_t.append((paths[j][0] + v - 10000. + random.random()/10000, temp_path_words))
                             else:
-                                print (v, LM_probs[(paths[j][1][-2], paths[j][1][-1], w)])
+                                # print (v, LM_probs[(paths[j][1][-2], paths[j][1][-1], w)])
                                 probs_at_t.append((paths[j][0] + v + \
                                                    weight_LM * LM_probs[(paths[j][1][-2], paths[j][1][-1], w)] + \
                                                    random.random()/10000, temp_path_words))
