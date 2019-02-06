@@ -99,11 +99,13 @@ class Model(nn.Module):
         pos_speaker_loss, neg_speaker_loss = \
             self.compute_speaker_losses(target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens)
         if mode == 'train':
-            paired_loss = self.compute_reconstruction_loss(paired_phn_hiddens, txt_paired_hiddens, False)
+            pos_paired_loss, neg_paired_loss = \
+                self.compute_speaker_losses(paired_phn_hiddens, txt_paired_hiddens, pos_phn_hiddens)
         else:
-            paired_loss = self.compute_reconstruction_loss(target_phn_hiddens, txt_hiddens, False)
+            pos_paired_loss, neg_paired_loss = \
+                self.compute_speaker_losses(target_phn_hiddens, txt_hiddens, pos_phn_hiddens)
         return target_phn_hiddens, target_spk_hiddens, txt_hiddens, reconstruction_loss, txt_reconstruction_loss, \
-            generation_loss, discrimination_loss, GP_loss, pos_speaker_loss, neg_speaker_loss, paired_loss
+            generation_loss, discrimination_loss, GP_loss, pos_speaker_loss, neg_speaker_loss, pos_paired_loss, neg_paired_loss
 
 
 class A2VwD(nn.Module):
