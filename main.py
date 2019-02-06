@@ -80,9 +80,12 @@ def add_parser():
     parser.add_argument('--weight_neg_spk',type=float, default=1.,
         metavar='--<weight of neg_spk_loss>',
         help='weight of neg_spk_loss')
-    parser.add_argument('--weight_paired',type=float, default=1.,
-        metavar='--<weight of paired_loss>',
-        help='weight of paired_loss')
+    parser.add_argument('--weight_pos_paired',type=float, default=1.,
+        metavar='--<weight of pos_paired_loss>',
+        help='weight of pos_paired_loss')
+    parser.add_argument('--weight_neg_paired',type=float, default=1.,
+        metavar='--<weight of neg_paired_loss>',
+        help='weight of neg_paired_loss')
     parser.add_argument('--weight_d',type=float, default=1.,
         metavar='--<weight of d_loss>',
         help='weight of d_loss')
@@ -182,8 +185,8 @@ if __name__ == '__main__':
     solver = Solver(FLAG.init_lr, FLAG.batch_size, FLAG.seq_len, FLAG.feat_dim, FLAG.p_hidden_dim,
                     FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.D_num_layers, FLAG.dropout_rate, 
                     FLAG.iter_d, FLAG.weight_r, FLAG.weight_txt_r, FLAG.weight_g, FLAG.weight_pos_spk,
-                    FLAG.weight_neg_spk, FLAG.weight_paired, FLAG.weight_d, FLAG.weight_gp,
-                    FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode)
+                    FLAG.weight_neg_spk, FLAG.weight_pos_paired, FLAG.weight_neg_paired, 
+                    FLAG.weight_d, FLAG.weight_gp, FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode)
     solver.build_model()
     print ("Solver constructed!")
 
