@@ -246,6 +246,7 @@ class Speech:
             pos_neg_indices = indices[:len(batch_data)//2]
         else:
             pos_neg_indices = indices
+
         for idx in pos_neg_indices:
             spk = self.wrd_idx2spk[idx]
 
@@ -262,6 +263,16 @@ class Speech:
             self.spks.append(spk)
             idx_neg = random.choice(self.spk2wrd_idx[rand_spk])
             batch_data.append(self.feat[idx_neg])
+
+        for idx in pos_neg_indices:
+            wrd = self.wrds[idx]
+            neg_paired_index = idx
+            neg_paired_wrd = wrd
+            while neg_paired_wrd == wrd:
+                neg_paired_index = random.randint(0, len(self.wrds)-1)
+                neg_paired_wrd = self.wrds[neg_paired_index]
+            batch_data.append(self.feat[neg_paired_index])
+
 
         batch_length = torch.tensor([len(wrd) for wrd in batch_data], device=device)
         batch_order = np.array(sorted(range(len(batch_data)), key=lambda k: len(batch_data[k]), reverse=True))
