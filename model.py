@@ -76,14 +76,14 @@ class Model(nn.Module):
 
     def forward(self, batch_size, feats, lengths, orders, txt_feats, txt_lengths, txt_orders, mode):
         if mode == 'train':
-            reconstructed, target_phn_hiddens, paired_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens, \
-                target_spk_hiddens, paired_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens \
+            reconstructed, target_phn_hiddens, paired_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens, neg_paired_phn_hiddens, \
+                target_spk_hiddens, paired_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens, neg_paired_spk_hiddens \
                 = self.a2v(batch_size, feats, lengths, orders, mode)
             txt_reconstructed, txt_hiddens, txt_paired_hiddens \
                 = self.t2v(batch_size, txt_feats, txt_lengths, txt_orders, mode)
         else:
-            reconstructed, target_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens, \
-                target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens \
+            reconstructed, target_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens, neg_paired_phn_hiddens, \
+                target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens, neg_paired_spk_hiddens \
                 = self.a2v(batch_size, feats, lengths, orders, mode)
             txt_reconstructed, txt_hiddens \
                 = self.t2v(batch_size, txt_feats, txt_lengths, txt_orders, mode)
@@ -100,10 +100,10 @@ class Model(nn.Module):
             self.compute_speaker_losses(target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens)
         if mode == 'train':
             pos_paired_loss, neg_paired_loss = \
-                self.compute_speaker_losses(paired_phn_hiddens, txt_paired_hiddens, pos_phn_hiddens)
+                self.compute_speaker_losses(txt_paired_hiddens, paired_phn_hiddens, neg_paired_phn_hiddens)
         else:
             pos_paired_loss, neg_paired_loss = \
-                self.compute_speaker_losses(target_phn_hiddens, txt_hiddens, pos_phn_hiddens)
+                self.compute_speaker_losses(txt_hiddens, target_phn_hiddens, neg_paired_phn_hiddens)
         return target_phn_hiddens, target_spk_hiddens, txt_hiddens, reconstruction_loss, txt_reconstruction_loss, \
             generation_loss, discrimination_loss, GP_loss, pos_speaker_loss, neg_speaker_loss, pos_paired_loss, neg_paired_loss
 
@@ -135,10 +135,12 @@ class A2VwD(nn.Module):
         if mode == 'train':
             paired_phn_hiddens = phn_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
             pos_phn_hiddens = phn_hiddens[batch_size*2:batch_size*3, :, :].view(batch_size, -1)
-            neg_phn_hiddens = phn_hiddens[batch_size*3:, :, :].view(batch_size, -1)
+            neg_phn_hiddens = phn_hiddens[batch_size*3:batch_size*4, :, :].view(batch_size, -1)
+            neg_paired_phn_hiddens = phn_hiddens[batch_size*4:, :, :].view(batch_size, -1)
         else:
             pos_phn_hiddens = phn_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
-            neg_phn_hiddens = phn_hiddens[batch_size*2:, :, :].view(batch_size, -1)
+            neg_phn_hiddens = phn_hiddens[batch_size*2:batch_size*3, :, :].view(batch_size, -1)
+            neg_paired_phn_hiddens = phn_hiddens[batch_size*3:, :, :].view(batch_size, -1)
 
         # split spk_hiddens
         _, spk_hiddens = self.spk_encoder(emb_feats, lengths)
@@ -148,10 +150,12 @@ class A2VwD(nn.Module):
         if mode == 'train':
             paired_spk_hiddens = spk_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
             pos_spk_hiddens = spk_hiddens[batch_size*2:batch_size*3, :, :].view(batch_size, -1)
-            neg_spk_hiddens = spk_hiddens[batch_size*3:, :, :].view(batch_size, -1)
+            neg_spk_hiddens = spk_hiddens[batch_size*3:batch_size*4, :, :].view(batch_size, -1)
+            neg_paired_spk_hiddens = spk_hiddens[batch_size*4:, :, :].view(batch_size, -1)
         else:
             pos_spk_hiddens = spk_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
-            neg_spk_hiddens = spk_hiddens[batch_size*2:, :, :].view(batch_size, -1)
+            neg_spk_hiddens = spk_hiddens[batch_size*2:batch_size*3, :, :].view(batch_size, -1)
+            neg_paired_spk_hiddens = spk_hiddens[batch_size*3:, :, :].view(batch_size, -1)
 
         # construct decoder hiddens
         target_concat_hiddens = torch.cat((phn_hiddens[:batch_size, :, :], spk_hiddens[:batch_size, :, :]), -1).transpose(0, 1)
@@ -171,11 +175,11 @@ class A2VwD(nn.Module):
         reconstructed = self.output_MLP(reconstructed)
 
         if mode == 'train':
-            return reconstructed, target_phn_hiddens, paired_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens, \
-                target_spk_hiddens, paired_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens
+            return reconstructed, target_phn_hiddens, paired_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens, neg_paired_phn_hiddens, \
+                target_spk_hiddens, paired_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens, neg_paired_spk_hiddens
         else:
-            return reconstructed, target_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens, \
-                target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens
+            return reconstructed, target_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens, neg_paired_phn_hiddens, \
+                target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens, neg_paired_spk_hiddens
 
 
 class A2V(nn.Module):

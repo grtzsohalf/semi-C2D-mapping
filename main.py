@@ -176,6 +176,11 @@ if __name__ == '__main__':
     LM = count_LM(wrds) 
     train_data.LM = LM
     test_data.LM = LM
+    # sorted_LM = sorted(LM.items(), key=lambda kv: kv[1], reverse=True)
+    # with open('TIMIT_utils/LM.txt', 'w') as f:
+        # for pair, log_prob in sorted_LM:
+            # f.write(pair[0]+' '+pair[1]+' '+pair[2]+': '+str(log_prob)+'\n')
+    # exit()
 
 
     ######################################################################
