@@ -13,7 +13,7 @@ device_id=$1
 num_paired=$2
 n_epochs=$3
 
-init_lr=0.0002
+init_lr=0.00005
 batch_size=32
 seq_len=165
 feat_dim=39
