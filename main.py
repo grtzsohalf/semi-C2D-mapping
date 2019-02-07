@@ -55,15 +55,15 @@ def add_parser():
     parser.add_argument('--dec_num_layers',type=int, default=3,
         metavar='--<number of decoder rnn layers>',
         help='number of decoder rnn layers')
-    parser.add_argument('--D_num_layers',type=int, default=3,
-        metavar='--<number of discriminator fully-connected layers>',
-        help='number of phonetic discriminator fully-connected layers')
+    # parser.add_argument('--D_num_layers',type=int, default=3,
+        # metavar='--<number of discriminator fully-connected layers>',
+        # help='number of phonetic discriminator fully-connected layers')
     parser.add_argument('--dropout_rate',type=float, default=0.3,
         metavar='--<dropout rate of encoder/decoder>',
         help='dropout rate of encoder/decoder')
-    parser.add_argument('--iter_d',type=int, default=3,
-        metavar='--<num_iterations of D while updating G once>',
-        help='num_iterations of D while updating G once')
+    # parser.add_argument('--iter_d',type=int, default=3,
+        # metavar='--<num_iterations of D while updating G once>',
+        # help='num_iterations of D while updating G once')
 
     parser.add_argument('--weight_r',type=float, default=1.,
         metavar='--<weight of r_loss>',
@@ -71,9 +71,9 @@ def add_parser():
     parser.add_argument('--weight_txt_r',type=float, default=1.,
         metavar='--<weight of txt_r_loss>',
         help='weight of txt_r_loss')
-    parser.add_argument('--weight_g',type=float, default=1.,
-        metavar='--<weight of g_loss>',
-        help='weight of g_loss')
+    # parser.add_argument('--weight_g',type=float, default=1.,
+        # metavar='--<weight of g_loss>',
+        # help='weight of g_loss')
     parser.add_argument('--weight_pos_spk',type=float, default=1.,
         metavar='--<weight of pos_spk_loss>',
         help='weight of pos_spk_loss')
@@ -86,12 +86,12 @@ def add_parser():
     parser.add_argument('--weight_neg_paired',type=float, default=1.,
         metavar='--<weight of neg_paired_loss>',
         help='weight of neg_paired_loss')
-    parser.add_argument('--weight_d',type=float, default=1.,
-        metavar='--<weight of d_loss>',
-        help='weight of d_loss')
-    parser.add_argument('--weight_gp',type=float, default=1.,
-        metavar='--<weight of gp_loss>',
-        help='weight of gp_loss')
+    # parser.add_argument('--weight_d',type=float, default=1.,
+        # metavar='--<weight of d_loss>',
+        # help='weight of d_loss')
+    # parser.add_argument('--weight_gp',type=float, default=1.,
+        # metavar='--<weight of gp_loss>',
+        # help='weight of gp_loss')
 
     parser.add_argument('--width',type=int, default=10,
         metavar='--<beam width>',
@@ -188,10 +188,10 @@ if __name__ == '__main__':
     #
 
     solver = Solver(FLAG.init_lr, FLAG.batch_size, FLAG.seq_len, FLAG.feat_dim, FLAG.p_hidden_dim,
-                    FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.D_num_layers, FLAG.dropout_rate, 
-                    FLAG.iter_d, FLAG.weight_r, FLAG.weight_txt_r, FLAG.weight_g, FLAG.weight_pos_spk,
+                    FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.dropout_rate, 
+                    FLAG.weight_r, FLAG.weight_txt_r, FLAG.weight_pos_spk,
                     FLAG.weight_neg_spk, FLAG.weight_pos_paired, FLAG.weight_neg_paired, 
-                    FLAG.weight_d, FLAG.weight_gp, FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode)
+                    FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode)
     solver.build_model()
     print ("Solver constructed!")
 
