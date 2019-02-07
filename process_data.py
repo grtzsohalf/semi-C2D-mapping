@@ -269,7 +269,7 @@ class Speech:
             neg_paired_index = idx
             neg_paired_wrd = wrd
             while neg_paired_wrd == wrd:
-                neg_paired_index = random.randint(0, len(self.wrds))
+                neg_paired_index = random.randint(0, len(self.wrds)-1)
                 neg_paired_wrd = self.wrds[neg_paired_index]
             batch_data.append(self.feat[neg_paired_index])
 

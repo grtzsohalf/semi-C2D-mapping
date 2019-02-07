@@ -11,13 +11,13 @@ fi
 #RNN_module=$1
 device_id=$1
 
-init_lr=0.0005
+init_lr=0.00005
 batch_size=32
 seq_len=165
 feat_dim=39
 hidden_dim=256
-enc_num_layers=2
-dec_num_layers=2
+enc_num_layers=3
+dec_num_layers=3
 D_num_layers=3
 dropout_rate=0.3
 iter_d=3
