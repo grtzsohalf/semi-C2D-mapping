@@ -243,7 +243,7 @@ class Solver:
                     total_phn_hiddens = phn_hiddens.cpu().detach().numpy()
                     total_txt_hiddens = txt_hiddens.cpu().detach().numpy()
 
-            total_losses += losses
+            total_losses += losses.item()
             # total_G_losses += G_losses.item()
             # total_D_losses += D_losses.item()
             total_r_loss += r_loss.item()
