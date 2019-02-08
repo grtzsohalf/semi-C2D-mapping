@@ -13,7 +13,7 @@ device_id=$1
 num_paired=$2
 n_epochs=$3
 
-init_lr=0.0002
+init_lr=0.0001
 batch_size=32
 seq_len=165
 feat_dim=39
@@ -29,19 +29,22 @@ weight_txt_r=1.
 #weight_g=1.
 weight_pos_spk=1.
 weight_neg_spk=1.
-weight_pos_paired=1.
-weight_neg_paired=1.
+weight_pos_paired=5.
+weight_neg_paired=5.
 #weight_d=1.
 #weight_gp=1.
+pos_thres=0.005
+neg_thres=0.01
 
-width=20
+top_NN=100
+width=10
 weight_LM=0.01
 
 mkdir -p $exp_dir
 
-model_dir=$exp_dir/model_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_r}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}
-log_dir=$exp_dir/log_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_r}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}
-result_dir=$exp_dir/result_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_r}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}
+model_dir=$exp_dir/model_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_r}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${pos_thres}_${neg_thres}
+log_dir=$exp_dir/log_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_r}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${pos_thres}_${neg_thres}
+result_dir=$exp_dir/result_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_r}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}_${pos_thres}_${neg_thres}
 
 mkdir -p $model_dir
 mkdir -p $log_dir
@@ -73,7 +76,8 @@ mode=train
 python3 $path/main.py --init_lr=$init_lr --batch_size=$batch_size --seq_len=$seq_len --feat_dim=$feat_dim \
   --p_hidden_dim=$hidden_dim --phn_num_layers=$enc_num_layers --dec_num_layers=$dec_num_layers --dropout_rate=$dropout_rate \
   --weight_r=$weight_r --weight_txt_r=$weight_txt_r --weight_pos_spk=$weight_pos_spk --weight_neg_spk=$weight_neg_spk \
-  --weight_pos_paired=$weight_pos_paired --weight_neg_paired=$weight_neg_paired --n_epochs=$n_epochs \
+  --weight_pos_paired=$weight_pos_paired --weight_neg_paired=$weight_neg_paired --pos_thres=$pos_thres --neg_thres=$neg_thres \
+  --top_NN=$top_NN --width=$width --weight_LM=$weight_LM --n_epochs=$n_epochs \
   $train_meta_pkl $train_mfcc_pkl $train_phn_pkl $train_wrd_pkl $train_slb_pkl \
   $test_meta_pkl $test_mfcc_pkl $test_phn_pkl $test_wrd_pkl $test_slb_pkl \
   $log_dir $model_dir $result_dir $mode $num_paired

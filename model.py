@@ -18,10 +18,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Model(nn.Module):
 
-    def __init__(self, a2v, t2v):
+    def __init__(self, a2v, t2v, pos_thres, neg_thres):
         super(Model, self).__init__()
         self.a2v = a2v
         self.t2v = t2v
+        self.pos_thres = pos_thres
+        self.neg_thres = neg_thres
         # self.discriminator = discriminator
 
     def flatten_parameters(self):
@@ -100,13 +102,15 @@ class Model(nn.Module):
         # generation_loss, discrimination_loss, GP_loss \
             # = self.compute_GAN_losses(batch_size, target_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens)
         pos_speaker_loss, neg_speaker_loss = \
-            self.compute_hinge_losses(target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens, 0.001, 0.01)
+            self.compute_hinge_losses(target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens, self.pos_thres, self.neg_thres)
         if mode == 'train':
             pos_paired_loss, neg_paired_loss = \
-                self.compute_hinge_losses(txt_paired_hiddens, paired_phn_hiddens, neg_paired_phn_hiddens, None, 0.01)
+                self.compute_hinge_losses(txt_paired_hiddens, paired_phn_hiddens, neg_paired_phn_hiddens, 
+                                          None, self.neg_thres)
         else:
             pos_paired_loss, neg_paired_loss = \
-                self.compute_hinge_losses(txt_hiddens, target_phn_hiddens, neg_paired_phn_hiddens, None, 0.01)
+                self.compute_hinge_losses(txt_hiddens, target_phn_hiddens, neg_paired_phn_hiddens, 
+                                          None, self.neg_thres)
         return target_phn_hiddens, target_spk_hiddens, txt_hiddens, reconstruction_loss, txt_reconstruction_loss, \
             pos_speaker_loss, neg_speaker_loss, pos_paired_loss, neg_paired_loss
 
