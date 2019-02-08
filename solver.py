@@ -35,7 +35,7 @@ class Solver:
                  enc_num_layers, dec_num_layers, dropout_rate, 
                  weight_r, weight_txt_r, weight_pos_spk,
                  weight_neg_spk, weight_pos_paired, weight_neg_paired,
-                 width, weight_LM, log_dir, mode):
+                 top_NN, width, weight_LM, log_dir, mode):
 
         self.init_lr = init_lr
         self.batch_size = batch_size
@@ -58,6 +58,7 @@ class Solver:
         # self.weight_d = weight_d
         # self.weight_gp = weight_gp
 
+        self.top_NN = top_NN
         self.width = width
         self.weight_LM = weight_LM
 
@@ -82,7 +83,7 @@ class Solver:
     # ------------------
     #
 
-    def build_model(self):
+    def build_model(self, pos_thres, neg_thres):
 
         class MLP(nn.Module):
 
@@ -126,7 +127,7 @@ class Solver:
         # discriminator = FCDiscriminator(2*self.hidden_dim*2, self.hidden_dim, self.D_num_layers)
 
         # the whole model
-        self.model = Model(a2v, t2v) 
+        self.model = Model(a2v, t2v, pos_thres, neg_thres) 
 
         self.model.to(device)
         # print (next(self.model.parameters()).is_cuda)
@@ -272,7 +273,17 @@ class Solver:
         print (phn_hiddens.shape)
         print (txt_hiddens.shape)
 
-        sim_values, sim_wrds = getNN(200, phn_hiddens, txt_hiddens, wrds)
+        sim_values, sim_wrds = getNN(self.top_NN, phn_hiddens, txt_hiddens, wrds)
+
+        # indices = []
+        # for sim_w_utt, w in zip(sim_wrds, data.wrds):
+            # for i, sim_w in enumerate(sim_w_utt):
+                # if sim_w == w or i == len(sim_w_utt)-1:
+                    # indices.append(i)
+                    # break
+        # print (indices)
+
+
         utt_lens = [len(u) for u in data.wrd_meta]
         print (sum(utt_lens), len(sim_values), len(sim_wrds))
         start = 0
@@ -397,7 +408,7 @@ class Solver:
             train_pos_paired_loss, train_neg_paired_loss, train_phn_hiddens, train_txt_hiddens \
             = self.compute(train_data, 'test')#, result_file=os.path.join(result_dir, f'result_train.pkl'))
 
-        print ('Train -----> losses: ',train_G_losses, 
+        print ('Train -----> losses: ',train_losses, 
                '\nr_loss:          ', train_r_loss, '\ntxt_r_loss:      ', train_txt_r_loss, 
                '\npos_spk_loss:    ', train_pos_spk_loss, '\nneg_spk_loss:    ', train_neg_spk_loss, 
                '\npos_paired_loss: ', train_pos_paired_loss, '\nneg_paired_loss: ', train_neg_paired_loss)
@@ -420,7 +431,7 @@ class Solver:
             eval_pos_paired_loss, eval_neg_paired_loss, eval_phn_hiddens, _ \
             = self.compute(test_data, 'test')#, result_file=os.path.join(result_dir, 'result_test.pkl'))
 
-        print ('Eval -----> losses: ',eval_G_losses, 
+        print ('Eval -----> losses: ',eval_losses, 
                '\nr_loss:          ', eval_r_loss, '\ntxt_r_loss:      ', eval_txt_r_loss, 
                '\npos_spk_loss:    ', eval_pos_spk_loss, '\nneg_spk_loss:    ', eval_neg_spk_loss, 
                '\npos_paired_loss: ', eval_pos_paired_loss, '\nneg_paired_loss: ', eval_neg_paired_loss)

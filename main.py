@@ -92,7 +92,16 @@ def add_parser():
     # parser.add_argument('--weight_gp',type=float, default=1.,
         # metavar='--<weight of gp_loss>',
         # help='weight of gp_loss')
+    parser.add_argument('--pos_thres',type=float, default=0.01,
+        metavar='--<threshold of positive paired loss>',
+        help='threshold of positive paired loss')
+    parser.add_argument('--neg_thres',type=float, default=0.01,
+        metavar='--<threshold of negative paired loss>',
+        help='threshold of negative paired loss')
 
+    parser.add_argument('--top_NN',type=int, default=100,
+        metavar='--<number of top nearest neighbors>',
+        help='number of top nearest neighbors')
     parser.add_argument('--width',type=int, default=10,
         metavar='--<beam width>',
         help='beam width')
@@ -191,8 +200,8 @@ if __name__ == '__main__':
                     FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.dropout_rate, 
                     FLAG.weight_r, FLAG.weight_txt_r, FLAG.weight_pos_spk,
                     FLAG.weight_neg_spk, FLAG.weight_pos_paired, FLAG.weight_neg_paired, 
-                    FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode)
-    solver.build_model()
+                    FLAG.top_NN, FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode)
+    solver.build_model(FLAG.pos_thres, FLAG.neg_thres)
     print ("Solver constructed!")
 
 
@@ -220,6 +229,7 @@ if __name__ == '__main__':
             global_step = int(model_name.split('_')[1])
     else:
         if not os.path.exists(save_dir):
+            print (save_dir)
             print("save_dir should exist in eval mode", file=sys.stderr)
             sys.exit(-1)
         print ('Loading model...')
