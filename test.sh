@@ -16,8 +16,8 @@ batch_size=32
 seq_len=165
 feat_dim=39
 hidden_dim=256
-enc_num_layers=3
-dec_num_layers=3
+enc_num_layers=2
+dec_num_layers=2
 #D_num_layers=3
 dropout_rate=0.3
 #iter_d=3
@@ -32,8 +32,8 @@ weight_neg_paired=1.
 #weight_d=1.
 #weight_gp=1.
 
-width=20
-weight_LM=0.1
+width=50
+weight_LM=0.01
 
 model_dir=$exp_dir/model_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_r}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}
 log_dir=$exp_dir/log_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_r}_${weight_pos_spk}_${weight_neg_spk}_${weight_pos_paired}_${weight_neg_paired}

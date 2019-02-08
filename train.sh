@@ -18,8 +18,8 @@ batch_size=32
 seq_len=165
 feat_dim=39
 hidden_dim=256
-enc_num_layers=3
-dec_num_layers=3
+enc_num_layers=2
+dec_num_layers=2
 #D_num_layers=3
 dropout_rate=0.3
 #iter_d=3
@@ -35,7 +35,7 @@ weight_neg_paired=1.
 #weight_gp=1.
 
 width=20
-weight_LM=0.1
+weight_LM=0.01
 
 mkdir -p $exp_dir
 

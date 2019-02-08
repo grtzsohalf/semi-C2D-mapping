@@ -377,8 +377,7 @@ class Solver:
             state = {
                 'epoch': epoch,
                 'state_dict': self.model.state_dict(),
-                'optimizer_G_state_dict': optimizer_G.state_dict(),
-                'optimizer_D_state_dict': optimizer_D.state_dict()
+                'optimizer_G_state_dict': optimizer_G.state_dict()
             }
             name = 'epoch_'+str(epoch)
             saver.save(state, name)
