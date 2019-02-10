@@ -13,8 +13,8 @@ from torch import optim
 from torch import autograd
 import torch.nn.functional as F
 
-from WGAN_GP import FCDiscriminator
-from model import A2VwD, A2V, Model
+# from WGAN_GP import FCDiscriminator
+from model import Model
 from seq2seq import EncoderRNN, DecoderRNN
 from utils import weight_init, write_pkl, Logger, getNN, beam_search
 from torch.optim.lr_scheduler import StepLR
@@ -33,8 +33,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Solver:
     def __init__(self, init_lr, batch_size, seq_len, feat_dim, hidden_dim, 
                  enc_num_layers, dec_num_layers, dropout_rate, 
-                 weight_r, weight_txt_r, weight_pos_spk,
-                 weight_neg_spk, weight_pos_paired, weight_neg_paired,
+                 weight_r, weight_txt_ce,
+                 weight_pos_paired, weight_neg_paired,
                  top_NN, width, weight_LM, log_dir, mode):
 
         self.init_lr = init_lr
@@ -49,10 +49,10 @@ class Solver:
         # self.iter_d = iter_d
 
         self.weight_r = weight_r
-        self.weight_txt_r = weight_txt_r
+        self.weight_txt_ce = weight_txt_ce
         # self.weight_g = weight_g
-        self.weight_pos_spk = weight_pos_spk
-        self.weight_neg_spk = weight_neg_spk
+        # self.weight_pos_spk = weight_pos_spk
+        # self.weight_neg_spk = weight_neg_spk
         self.weight_pos_paired = weight_pos_paired
         self.weight_neg_paired = weight_neg_paired
         # self.weight_d = weight_d
@@ -83,7 +83,7 @@ class Solver:
     # ------------------
     #
 
-    def build_model(self, pos_thres, neg_thres):
+    def build_model(self, neg_thres):
 
         class MLP(nn.Module):
 
@@ -100,18 +100,18 @@ class Solver:
                 return output
 
         # A2V
-        input_MLP = MLP([self.feat_dim, self.hidden_dim, self.hidden_dim])
+        aud_input_MLP = MLP([self.feat_dim, self.hidden_dim, self.hidden_dim])
         phn_encoder = EncoderRNN(self.hidden_dim, self.seq_len, self.hidden_dim, 
                                  input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate,
                                  n_layers=self.enc_num_layers, bidirectional=True, rnn_cell='gru', variable_lengths=True)
         spk_encoder = EncoderRNN(self.hidden_dim, self.seq_len, self.hidden_dim, 
                                  input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate,
                                  n_layers=self.enc_num_layers, bidirectional=True, rnn_cell='gru', variable_lengths=True)
-        decoder = DecoderRNN(self.hidden_dim*4, self.seq_len, self.hidden_dim*4, n_layers=self.dec_num_layers, 
+        aud_decoder = DecoderRNN(self.hidden_dim*4, self.seq_len, self.hidden_dim*4, n_layers=self.dec_num_layers, 
                              rnn_cell='gru', bidirectional=True, input_dropout_p=self.dropout_rate, dropout_p=self.dropout_rate)
-        output_MLP = MLP([self.hidden_dim*4, self.hidden_dim, self.feat_dim])
+        aud_output_MLP = MLP([self.hidden_dim*4, self.hidden_dim, self.feat_dim])
 
-        a2v = A2VwD(input_MLP, phn_encoder, spk_encoder, decoder, output_MLP, self.dec_num_layers)
+        # a2v = A2VwD(input_MLP, phn_encoder, spk_encoder, decoder, output_MLP, self.dec_num_layers)
 
         # T2V
         txt_input_MLP = MLP([60, self.hidden_dim])
@@ -121,13 +121,14 @@ class Solver:
                              rnn_cell='gru', bidirectional=True)
         txt_output_MLP = MLP([self.hidden_dim*2, 60])
 
-        t2v = A2V(txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1)
+        # t2v = A2V(txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1)
 
         # size of discriminator input = num_directions * p_hidden_dim * 2
         # discriminator = FCDiscriminator(2*self.hidden_dim*2, self.hidden_dim, self.D_num_layers)
 
         # the whole model
-        self.model = Model(a2v, t2v, pos_thres, neg_thres) 
+        self.model = Model(aud_input_MLP, phn_encoder, spk_encoder, aud_decoder, aud_output_MLP, self.dec_num_layers, 
+                 txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1, neg_thres) 
 
         self.model.to(device)
         # print (next(self.model.parameters()).is_cuda)
@@ -147,10 +148,10 @@ class Solver:
         # total_G_losses = 0
         # total_D_losses = 0
         total_r_loss = 0
-        total_txt_r_loss = 0
+        total_txt_ce_loss = 0
         # total_g_loss = 0
-        total_pos_spk_loss = 0
-        total_neg_spk_loss = 0
+        # total_pos_spk_loss = 0
+        # total_neg_spk_loss = 0
         total_pos_paired_loss = 0
         total_neg_paired_loss = 0
         # total_d_loss = 0
@@ -162,22 +163,22 @@ class Solver:
         total_indices = np.arange(data.n_total_wrds)
         if mode == 'train':
             np.random.shuffle(total_indices)
-            if data.num_paired == -1:
-                total_indices_paired = np.arange(data.n_total_wrds)
-            else:
-                total_indices_paired = np.arange(data.num_paired)
+
+        if data.num_paired == -1:
+            total_indices_paired = np.arange(data.n_total_wrds)
+        else:
+            total_indices_paired = np.arange(data.num_paired)
 
         # for i in tqdm(range(data.n_batches-1, data.n_batches)):
         for i in tqdm(range(data.n_batches)):
             indices = total_indices[i*self.batch_size:(i+1)*self.batch_size]
             batch_size = len(indices)
-            if mode == 'train':
-                indices_paired = np.random.choice(total_indices_paired, batch_size, False)
-                indices = np.concatenate((indices, indices_paired), axis=0)
+            indices_paired = np.random.choice(total_indices_paired, batch_size, False)
+            indices = np.concatenate((indices, indices_paired), axis=0)
 
             batch_data, batch_length, batch_order, \
-                batch_txt, batch_txt_length, batch_txt_order \
-                = data.get_batch_data(indices, mode)
+                batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels \
+                = data.get_batch_data(indices)
 
             if mode == 'train':
                 ################
@@ -203,32 +204,29 @@ class Solver:
                 # for p in self.model.discriminator.parameters():
                     # p.requires_grad = False # to avoid computation
                 
-                self.model.a2v.zero_grad()
-                self.model.t2v.zero_grad()
+                self.model.zero_grad()
 
-                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_r_loss, \
-                        pos_spk_loss, neg_spk_loss, pos_paired_loss, neg_paired_loss \
+                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, \
+                        pos_paired_loss, neg_paired_loss \
                         = self.model(batch_size, batch_data, batch_length, batch_order, 
-                                     batch_txt, batch_txt_length, batch_txt_order, 'train') 
+                                     batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels) 
                 # G_losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss + self.weight_g * g_loss \
                     # + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss \
                     # + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
-                losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss \
-                    + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss \
+                losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss \
                     + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
                 losses.backward()
                 optimizer_G.step()
             else:
-                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_r_loss, \
-                        pos_spk_loss, neg_spk_loss, pos_paired_loss, neg_paired_loss \
+                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, \
+                        pos_paired_loss, neg_paired_loss \
                         = self.model(batch_size, batch_data, batch_length, batch_order, 
-                                     batch_txt, batch_txt_length, batch_txt_order, 'test') 
+                                     batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels) 
                 # D_losses = self.weight_d * d_loss + self.weight_gp * gp_loss
                 # G_losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss + self.weight_g * g_loss \
                     # + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss \
                     # + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
-                losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss \
-                    + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss \
+                losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss \
                     + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
 
             if mode == 'test' and result_file:
@@ -248,10 +246,8 @@ class Solver:
             # total_G_losses += G_losses.item()
             # total_D_losses += D_losses.item()
             total_r_loss += r_loss.item()
-            total_txt_r_loss += txt_r_loss.item()
+            total_txt_ce_loss += txt_ce_loss.item()
             # total_g_loss += g_loss.item()
-            total_pos_spk_loss += pos_spk_loss.item()
-            total_neg_spk_loss += neg_spk_loss.item()
             total_pos_paired_loss += pos_paired_loss.item()
             total_neg_paired_loss += neg_paired_loss.item()
             # total_d_loss += d_loss.item()
@@ -259,8 +255,7 @@ class Solver:
 
             # del loss, target_output
 
-        return total_losses/data.n_batches, total_r_loss/data.n_batches, total_txt_r_loss/data.n_batches, \
-            total_pos_spk_loss/data.n_batches, total_neg_spk_loss/data.n_batches, \
+        return total_losses/data.n_batches, total_r_loss/data.n_batches, total_txt_ce_loss/data.n_batches, \
             total_pos_paired_loss/data.n_batches, total_neg_paired_loss/data.n_batches, \
             total_phn_hiddens, total_txt_hiddens
 
@@ -318,7 +313,7 @@ class Solver:
     def train_iters(self, train_data, test_data, saver, n_epochs, global_step, result_dir, print_every=1):
         # optimizer = optim.Adam(self.model.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
         # optimizer_D = optim.Adam(self.model.discriminator.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
-        optimizer_G = optim.Adam([{'params': self.model.a2v.parameters()}, {'params': self.model.t2v.parameters()}],
+        optimizer_G = optim.Adam([{'params': self.model.parameters()}],
                                   lr=self.init_lr, betas=(0.5, 0.95))
 
         for epoch in range(global_step+1, global_step+1+n_epochs):
@@ -326,25 +321,22 @@ class Solver:
             print ('\nEpoch: ', epoch)
             # Train
             print (' ')
-            train_losses, train_r_loss, train_txt_r_loss, train_pos_spk_loss, train_neg_spk_loss, \
+            train_losses, train_r_loss, train_txt_ce_loss, \
                 train_pos_paired_loss, train_neg_paired_loss, _, _ \
                 = self.compute(train_data, 'train', optimizer_G=optimizer_G)
         
             self.logger.scalar_summary('train_losses/losses', train_losses, epoch)
             self.logger.scalar_summary('train_losses/r_loss', train_r_loss, epoch)
-            self.logger.scalar_summary('train_losses/txt_r_loss', train_txt_r_loss, epoch)
-            self.logger.scalar_summary('train_losses/pos_spk_loss', train_pos_spk_loss, epoch)
-            self.logger.scalar_summary('train_losses/neg_spk_loss', train_neg_spk_loss, epoch)
+            self.logger.scalar_summary('train_losses/txt_ce_loss', train_txt_ce_loss, epoch)
             self.logger.scalar_summary('train_losses/pos_paired_loss', train_pos_paired_loss, epoch)
             self.logger.scalar_summary('train_losses/negpaired_loss', train_neg_paired_loss, epoch)
 
             print ('Train -----> losses: ',train_losses, 
-                   '\nr_loss:          ', train_r_loss, '\ntxt_r_loss:      ', train_txt_r_loss, 
-                   '\npos_spk_loss:    ', train_pos_spk_loss, '\nneg_spk_loss:    ', train_neg_spk_loss, 
+                   '\nr_loss:          ', train_r_loss, '\ntxt_r_loss:      ', train_txt_ce_loss, 
                    '\npos_paired_loss: ', train_pos_paired_loss, '\nneg_paired_loss: ', train_neg_paired_loss)
 
             # Evaluate for train data
-            train_losses, train_r_loss, train_txt_r_loss, train_pos_spk_loss, train_neg_spk_loss, \
+            train_losses, train_r_loss, train_txt_ce_loss, \
                 train_pos_paired_loss, train_neg_paired_loss, train_phn_hiddens, train_txt_hiddens \
                 = self.compute(train_data, 'test')#, result_file=os.path.join(result_dir, f'result_train_{epoch}.pkl'))
         
@@ -358,31 +350,28 @@ class Solver:
             unique_train_wrds = np.array([w[0] for w in unique_train_phn_wrds])
 
             self.score(train_data, train_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
-                       os.path.join(result_dir, f'trans_train_{epoch}_{self.width}_{self.weight_LM}.txt'),
-                       os.path.join(result_dir, f'acc_train_{self.width}_{self.weight_LM}.txt'))
+                       os.path.join(result_dir, f'trans_train_{epoch}_{self.top_NN}_{self.width}_{self.weight_LM}.txt'),
+                       os.path.join(result_dir, f'acc_train_{self.top_NN}_{self.width}_{self.weight_LM}.txt'))
 
             # Evaluate for eval data
             print (' ')
-            eval_losses, eval_r_loss, eval_txt_r_loss, eval_pos_spk_loss, eval_neg_spk_loss, \
+            eval_losses, eval_r_loss, eval_txt_ce_loss, \
                 eval_pos_paired_loss, eval_neg_paired_loss, eval_phn_hiddens, _ \
                 = self.compute(test_data, 'test')#, result_file=os.path.join(result_dir, f'result_test_{epoch}.pkl'))
         
             self.logger.scalar_summary('eval_losses/losses', eval_losses, epoch)
             self.logger.scalar_summary('eval_losses/r_loss', eval_r_loss, epoch)
-            self.logger.scalar_summary('eval_losses/txt_r_loss', eval_txt_r_loss, epoch)
-            self.logger.scalar_summary('eval_losses/pos_spk_loss', eval_pos_spk_loss, epoch)
-            self.logger.scalar_summary('eval_losses/neg_spk_loss', eval_neg_spk_loss, epoch)
+            self.logger.scalar_summary('eval_losses/txt_ce_loss', eval_txt_ce_loss, epoch)
             self.logger.scalar_summary('eval_losses/pos_paired_loss', eval_pos_paired_loss, epoch)
             self.logger.scalar_summary('eval_losses/neg_paired_loss', eval_neg_paired_loss, epoch)
 
             print ('Eval -----> losses: ',eval_losses, 
-                   '\nr_loss:          ', eval_r_loss, '\ntxt_r_loss:      ', eval_txt_r_loss, 
-                   '\npos_spk_loss:    ', eval_pos_spk_loss, '\nneg_spk_loss:    ', eval_neg_spk_loss, 
+                   '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, 
                    '\npos_paired_loss: ', eval_pos_paired_loss, '\nneg_paired_loss: ', eval_neg_paired_loss)
 
             self.score(test_data, eval_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
-                       os.path.join(result_dir, f'trans_test_{epoch}_{self.width}_{self.weight_LM}.txt'),
-                       os.path.join(result_dir, f'acc_test_{self.width}_{self.weight_LM}.txt'))
+                       os.path.join(result_dir, f'trans_test_{epoch}_{self.top_NN}_{self.width}_{self.weight_LM}.txt'),
+                       os.path.join(result_dir, f'acc_test_{self.top_NN}_{self.width}_{self.weight_LM}.txt'))
 
             # Save model
             state = {
@@ -404,13 +393,12 @@ class Solver:
     def evaluate(self, test_data, train_data, result_dir, print_every=1):
         # Evaluate for train data
         print (' ')
-        train_losses, train_r_loss, train_txt_r_loss, train_pos_spk_loss, train_neg_spk_loss, \
+        train_losses, train_r_loss, train_txt_ce_loss, \
             train_pos_paired_loss, train_neg_paired_loss, train_phn_hiddens, train_txt_hiddens \
             = self.compute(train_data, 'test')#, result_file=os.path.join(result_dir, f'result_train.pkl'))
 
         print ('Train -----> losses: ',train_losses, 
-               '\nr_loss:          ', train_r_loss, '\ntxt_r_loss:      ', train_txt_r_loss, 
-               '\npos_spk_loss:    ', train_pos_spk_loss, '\nneg_spk_loss:    ', train_neg_spk_loss, 
+               '\nr_loss:          ', train_r_loss, '\ntxt_ce_loss:      ', train_txt_ce_loss, 
                '\npos_paired_loss: ', train_pos_paired_loss, '\nneg_paired_loss: ', train_neg_paired_loss)
     
         unique_train_txt_hiddens = []
@@ -423,18 +411,17 @@ class Solver:
         unique_train_wrds = np.array([w[0] for w in unique_train_phn_wrds])
 
         self.score(train_data, train_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
-                   os.path.join(result_dir, f'trans_train_{self.width}_{self.weight_LM}.txt'))
+                   os.path.join(result_dir, f'trans_train_{self.top_NN}_{self.width}_{self.weight_LM}.txt'))
 
         # Evaluate for test data
         print (' ')
-        eval_losses, eval_r_loss, eval_txt_r_loss, eval_pos_spk_loss, eval_neg_spk_loss, \
+        eval_losses, eval_r_loss, eval_txt_ce_loss, \
             eval_pos_paired_loss, eval_neg_paired_loss, eval_phn_hiddens, _ \
             = self.compute(test_data, 'test')#, result_file=os.path.join(result_dir, 'result_test.pkl'))
 
         print ('Eval -----> losses: ',eval_losses, 
-               '\nr_loss:          ', eval_r_loss, '\ntxt_r_loss:      ', eval_txt_r_loss, 
-               '\npos_spk_loss:    ', eval_pos_spk_loss, '\nneg_spk_loss:    ', eval_neg_spk_loss, 
+               '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, 
                '\npos_paired_loss: ', eval_pos_paired_loss, '\nneg_paired_loss: ', eval_neg_paired_loss)
 
         self.score(test_data, eval_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
-                   os.path.join(result_dir, f'trans_test_{self.width}_{self.weight_LM}.txt'))
+                   os.path.join(result_dir, f'trans_test_{self.top_NN}_{self.width}_{self.weight_LM}.txt'))
