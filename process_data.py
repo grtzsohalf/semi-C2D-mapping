@@ -59,6 +59,8 @@ class Speech:
         self.n_wrds = 0
         self.wrds = []
 
+        self.phn_idx_arrays = []
+
         self.phn_wrd2idx = {}
         self.phn_wrd2cnt = Counter()
         self.idx2phn_wrd = {}
@@ -111,8 +113,7 @@ class Speech:
         return phn_wrd_data
 
 
-    def make_one_hot_feat(self, phn_tuple):
-        phn_idx_array = np.array([self.phn2idx[phn]-1 for phn in phn_tuple])
+    def make_one_hot_feat(self, phn_idx_array):
         f = np.zeros((len(phn_idx_array), self.n_phns-1))
         f[np.arange(len(phn_idx_array)), phn_idx_array] = 1.
         return f
@@ -186,7 +187,10 @@ class Speech:
                 self.spk2wrd_idx[spk].append(self.n_total_wrds-1)
                 self.wrd_idx2spk[self.n_total_wrds-1] = spk
                 self.feat.append(feat[i][wrd_start:wrd_end])
-                self.txt_feat.append(self.make_one_hot_feat(phn_wrd))
+
+                phn_idx_array = np.array([self.phn2idx[phn]-1 for phn in phn_wrd])
+                self.phn_idx_arrays.append(phn_idx_array)
+                self.txt_feat.append(self.make_one_hot_feat(phn_idx_array))
 
             self.wrd_meta.append(wrd_meta_utt)
             self.phn_wrd_meta.append(phn_wrd_meta_utt)
@@ -229,41 +233,42 @@ class Speech:
 
         return 
 
-    def get_batch_data(self, indices, mode):
+    def get_batch_data(self, indices):
         # txt
         batch_txt = [self.txt_feat[index] for index in indices]
+        batch_txt_labels = [self.phn_idx_arrays[index] for index in indices]
         batch_txt_length = torch.tensor([len(wrd) for wrd in batch_txt], device=device)
         batch_txt_order = np.array(sorted(range(len(batch_txt)), key=lambda k: len(batch_txt[k]), reverse=True))
         batch_txt = np.array(batch_txt)[batch_txt_order]
+        batch_txt_labels = np.array(batch_txt_labels)[batch_txt_order]
         batch_txt_length = batch_txt_length[batch_txt_order]
         batch_txt = pad_sequence(batch_txt).to(device)
+        batch_txt_labels = pad_sequence(batch_txt_labels).to(device)
 
         # target
         batch_data = [self.feat[index] for index in indices]
 
         # randomly select pos & neg
-        if mode == 'train':
-            pos_neg_indices = indices[:len(batch_data)//2]
-        else:
-            pos_neg_indices = indices
+        pos_neg_indices = indices[:len(batch_data)//2]
 
-        for idx in pos_neg_indices:
-            spk = self.wrd_idx2spk[idx]
+        # for idx in pos_neg_indices:
+            # spk = self.wrd_idx2spk[idx]
 
-            # feat_pos
-            idx_pos = random.choice(self.spk2wrd_idx[spk])
-            batch_data.append(self.feat[idx_pos])
+            # # feat_pos
+            # idx_pos = random.choice(self.spk2wrd_idx[spk])
+            # batch_data.append(self.feat[idx_pos])
 
-        for idx in pos_neg_indices:
-            spk = self.wrd_idx2spk[idx]
+        # for idx in pos_neg_indices:
+            # spk = self.wrd_idx2spk[idx]
 
-            # feat_neg
-            self.spks.remove(spk)
-            rand_spk = random.choice(self.spks)
-            self.spks.append(spk)
-            idx_neg = random.choice(self.spk2wrd_idx[rand_spk])
-            batch_data.append(self.feat[idx_neg])
+            # # feat_neg
+            # self.spks.remove(spk)
+            # rand_spk = random.choice(self.spks)
+            # self.spks.append(spk)
+            # idx_neg = random.choice(self.spk2wrd_idx[rand_spk])
+            # batch_data.append(self.feat[idx_neg])
 
+        # neg paired
         for idx in pos_neg_indices:
             wrd = self.wrds[idx]
             neg_paired_index = idx
@@ -294,4 +299,4 @@ class Speech:
         # batch_data: target,( paired,) pos, neg
         # batch_txt: target,( paired)
         return batch_data, batch_length, batch_invert, \
-               batch_txt, batch_txt_length, batch_txt_invert
+               batch_txt, batch_txt_length, batch_txt_invert, batch_txt_labels
