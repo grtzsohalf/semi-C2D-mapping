@@ -214,9 +214,9 @@ if __name__ == '__main__':
     if FLAG.mode == 'train':
         saver = PytorchSaver(100, save_dir)
         global_step = 0
+        print (save_dir)
         if os.listdir(save_dir):
             print ('Loading model...')
-            print (save_dir)
             model_name, state_dict = PytorchSaver.load_dir(save_dir)
             print ('Loaded model: '+model_name)
             # for k in state_dict['state_dict']:

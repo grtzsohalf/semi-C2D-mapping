@@ -167,7 +167,7 @@ class Solver:
         if data.num_paired == -1:
             total_indices_paired = np.arange(data.n_total_wrds)
         else:
-            total_indices_paired = np.arange(data.num_paired)
+            total_indices_paired = np.arange(min(data.num_paired, data.n_total_wrds))
 
         # for i in tqdm(range(data.n_batches-1, data.n_batches)):
         for i in tqdm(range(data.n_batches)):
@@ -265,8 +265,8 @@ class Solver:
     #
 
     def score(self, data, phn_hiddens, txt_hiddens, wrds, trans_file, acc_file=None):
-        print (phn_hiddens.shape)
-        print (txt_hiddens.shape)
+        # print (phn_hiddens.shape)
+        # print (txt_hiddens.shape)
 
         sim_values, sim_wrds = getNN(self.top_NN, phn_hiddens, txt_hiddens, wrds)
 
@@ -280,7 +280,7 @@ class Solver:
 
 
         utt_lens = [len(u) for u in data.wrd_meta]
-        print (sum(utt_lens), len(sim_values), len(sim_wrds))
+        # print (sum(utt_lens), len(sim_values), len(sim_wrds))
         start = 0
         sim_value_utts = []
         sim_wrd_utts = []
@@ -352,6 +352,7 @@ class Solver:
             self.score(train_data, train_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
                        os.path.join(result_dir, f'trans_train_{epoch}_{self.top_NN}_{self.width}_{self.weight_LM}.txt'),
                        os.path.join(result_dir, f'acc_train_{self.top_NN}_{self.width}_{self.weight_LM}.txt'))
+
 
             # Evaluate for eval data
             print (' ')
