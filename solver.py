@@ -35,7 +35,7 @@ class Solver:
                  enc_num_layers, dec_num_layers, dropout_rate, 
                  weight_r, weight_txt_ce,
                  weight_pos_paired, weight_neg_paired,
-                 top_NN, width, weight_LM, log_dir, mode):
+                 top_NN, width, weight_LM, log_dir, mode, unit_type):
 
         self.init_lr = init_lr
         self.batch_size = batch_size
@@ -65,6 +65,7 @@ class Solver:
         self.mode = mode
         if self.mode == 'train':
             self.logger = Logger(os.path.join(log_dir))
+        self.unit_type = unit_type
 
         self.model = None
 
@@ -114,12 +115,16 @@ class Solver:
         # a2v = A2VwD(input_MLP, phn_encoder, spk_encoder, decoder, output_MLP, self.dec_num_layers)
 
         # T2V
-        txt_input_MLP = MLP([60, self.hidden_dim])
+        if self.unit_type == 'char':
+            txt_feat_dim = 27
+        else:
+            txt_feat_dim = 60
+        txt_input_MLP = MLP([txt_feat_dim, self.hidden_dim])
         txt_encoder = EncoderRNN(self.hidden_dim, self.seq_len, self.hidden_dim, 
                                  n_layers=1, bidirectional=True, rnn_cell='gru', variable_lengths=True)
         txt_decoder = DecoderRNN(self.hidden_dim*2, self.seq_len, self.hidden_dim*2, n_layers=1, 
                              rnn_cell='gru', bidirectional=True)
-        txt_output_MLP = MLP([self.hidden_dim*2, 60])
+        txt_output_MLP = MLP([self.hidden_dim*2, txt_feat_dim])
 
         # t2v = A2V(txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1)
 
@@ -178,7 +183,7 @@ class Solver:
 
             batch_data, batch_length, batch_order, \
                 batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels \
-                = data.get_batch_data(indices)
+                = data.get_batch_data(indices, self.unit_type)
 
             if mode == 'train':
                 ################
@@ -391,12 +396,12 @@ class Solver:
     # ----------------------------
     #
 
-    def evaluate(self, test_data, train_data, result_dir, print_every=1):
+    def evaluate(self, test_data, train_data, result_dir, model_name, print_every=1):
         # Evaluate for train data
         print (' ')
         train_losses, train_r_loss, train_txt_ce_loss, \
             train_pos_paired_loss, train_neg_paired_loss, train_phn_hiddens, train_txt_hiddens \
-            = self.compute(train_data, 'test')#, result_file=os.path.join(result_dir, f'result_train.pkl'))
+            = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train_{model_name}.pkl'))
 
         print ('Train -----> losses: ',train_losses, 
                '\nr_loss:          ', train_r_loss, '\ntxt_ce_loss:      ', train_txt_ce_loss, 
@@ -418,7 +423,7 @@ class Solver:
         print (' ')
         eval_losses, eval_r_loss, eval_txt_ce_loss, \
             eval_pos_paired_loss, eval_neg_paired_loss, eval_phn_hiddens, _ \
-            = self.compute(test_data, 'test')#, result_file=os.path.join(result_dir, 'result_test.pkl'))
+            = self.compute(test_data, 'test', result_file=os.path.join(result_dir, f'result_test_{model_name}.pkl'))
 
         print ('Eval -----> losses: ',eval_losses, 
                '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, 

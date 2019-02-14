@@ -145,6 +145,8 @@ def add_parser():
         metavar='<mode (train or test)>')    
     parser.add_argument('num_paired', type=int, default=-1,
         metavar='<number of paired data>')    
+    parser.add_argument('unit_type',
+        metavar='<unt_type (\'char\' or \'phn\')>')    
 
     return parser
 
@@ -200,7 +202,7 @@ if __name__ == '__main__':
                     FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.dropout_rate, 
                     FLAG.weight_r, FLAG.weight_txt_ce,
                     FLAG.weight_pos_paired, FLAG.weight_neg_paired, 
-                    FLAG.top_NN, FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode)
+                    FLAG.top_NN, FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode, FLAG.unit_type)
     solver.build_model(FLAG.neg_thres)
     print ("Solver constructed!")
 
@@ -247,4 +249,4 @@ if __name__ == '__main__':
         solver.train_iters(train_data, test_data, saver, FLAG.n_epochs, global_step, FLAG.result_dir)
     else:
         print ('Start testing!')
-        solver.evaluate(test_data, train_data, FLAG.result_dir)
+        solver.evaluate(test_data, train_data, FLAG.result_dir, model_name)

@@ -2,9 +2,9 @@
 
 [ -f path.sh ] && . ./path.sh
 
-if [ $# != 3 ] ; then 
-  echo "usage: train.sh <CUDA_DEVICE> <num of paired> <n_epochs for training>"
-  echo "e.g. train.sh 0 1000 300"
+if [ $# != 4 ] ; then 
+  echo "usage: train.sh <CUDA_DEVICE> <num of paired> <n_epochs for training> <unit_type>"
+  echo "e.g. train.sh 0 1000 300 char"
   exit 1
 fi
 
@@ -12,6 +12,7 @@ fi
 device_id=$1
 num_paired=$2
 n_epochs=$3
+unit_type=$4
 
 init_lr=0.0001
 batch_size=32
@@ -42,9 +43,9 @@ weight_LM=0.01
 
 mkdir -p $exp_dir
 
-model_dir=$exp_dir/model_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
-log_dir=$exp_dir/log_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
-result_dir=$exp_dir/result_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
+model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
+log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
+result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
 
 mkdir -p $model_dir
 mkdir -p $log_dir
@@ -80,4 +81,4 @@ python3 $path/main.py --init_lr=$init_lr --batch_size=$batch_size --seq_len=$seq
   --top_NN=$top_NN --width=$width --weight_LM=$weight_LM --n_epochs=$n_epochs \
   $train_meta_pkl $train_mfcc_pkl $train_phn_pkl $train_wrd_pkl $train_slb_pkl \
   $test_meta_pkl $test_mfcc_pkl $test_phn_pkl $test_wrd_pkl $test_slb_pkl \
-  $log_dir $model_dir $result_dir $mode $num_paired
+  $log_dir $model_dir $result_dir $mode $num_paired $unit_type

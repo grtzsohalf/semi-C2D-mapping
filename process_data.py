@@ -41,6 +41,7 @@ class Speech:
 
         self.feat = []               # [num_of_wrds x num_of_frames x feat_dim]
         self.txt_feat = []           # [num_of_wrds x num_of_phns x txt_feat_dim]
+        self.txt_feat_char = []      # [num_of_wrds x num_of_chars x txt_feat_dim]
 
         self.phn_meta = []           # [num_of_utts x num_of_phns x (phn, utt_idx, start_frame, end_frame)]
         self.wrd_meta = []           # [num_of_utts x num_of_wrds x (wrd, utt_idx, start_frame, end_frame)]
@@ -51,6 +52,7 @@ class Speech:
         self.utt_idx2spk = {}
         self.spk2wrd_idx = {}
         self.wrd_idx2spk = {}
+
         self.spks = []
 
         self.wrd2idx = {}
@@ -80,6 +82,15 @@ class Speech:
         for phn, idx in self.phn2idx.items():
             self.idx2phn[idx] = phn
         self.phn2cnt = Counter()
+
+        self.chars = ['\''] + list(string.ascii_lowercase)
+        self.n_chars = len(self.chars)
+        self.char2idx = {}
+        self.idx2char = {}
+        for i, c in enumerate(self.chars):
+            self.char2idx[c] = i
+            self.idx2char[i] = c
+        self.char_idx_arrays = []
 
         self.LM = None
 
@@ -113,9 +124,9 @@ class Speech:
         return phn_wrd_data
 
 
-    def make_one_hot_feat(self, phn_idx_array):
-        f = np.zeros((len(phn_idx_array), self.n_phns-1))
-        f[np.arange(len(phn_idx_array)), phn_idx_array] = 1.
+    def make_one_hot_feat(self, idx_array, n_units):
+        f = np.zeros((len(idx_array), n_units))
+        f[np.arange(len(idx_array)), idx_array] = 1.
         return f
 
     def process_data(self, meta_file, feat_file, phn_file, wrd_file, slb_file):
@@ -190,7 +201,11 @@ class Speech:
 
                 phn_idx_array = np.array([self.phn2idx[phn]-1 for phn in phn_wrd])
                 self.phn_idx_arrays.append(phn_idx_array)
-                self.txt_feat.append(self.make_one_hot_feat(phn_idx_array))
+                self.txt_feat.append(self.make_one_hot_feat(phn_idx_array, self.n_phns-1))
+
+                char_idx_array = np.array([self.char2idx[char] for char in wrd])
+                self.char_idx_arrays.append(char_idx_array)
+                self.txt_feat_char.append(self.make_one_hot_feat(char_idx_array, self.n_chars))
 
             self.wrd_meta.append(wrd_meta_utt)
             self.phn_wrd_meta.append(phn_wrd_meta_utt)
@@ -217,6 +232,7 @@ class Speech:
 
         self.feat = np.array(self.feat)
         self.txt_feat = np.array(self.txt_feat)
+        self.txt_feat_char = np.array(self.txt_feat_char)
         self.n_batches = len(self.feat) // self.batch_size
         if len(self.feat) % self.batch_size != 0:
             self.n_batches += 1
@@ -226,17 +242,23 @@ class Speech:
         for phn_wrd_meta_utt in self.phn_wrd_meta:
             self.phn_wrds.extend([w[0] for w in phn_wrd_meta_utt])
 
-        print ('Num of total words: ', len(self.feat), len(self.txt_feat), self.n_total_wrds)
+        print ('Num of total words: ', len(self.feat), len(self.txt_feat), len(self.txt_feat_char), self.n_total_wrds)
         print ('Num of distinct words (with different phonemes): ', self.n_phn_wrds)
         print ('Num of distinct words: ', self.n_wrds)
         print ('Num of batches: ', self.n_batches)
 
         return 
 
-    def get_batch_data(self, indices):
+    def get_batch_data(self, indices, unit):
         # txt
-        batch_txt = [self.txt_feat[index] for index in indices]
-        batch_txt_labels = [self.phn_idx_arrays[index] for index in indices]
+        if unit == 'phn':
+            batch_txt = [self.txt_feat[index] for index in indices]
+            batch_txt_labels = [self.phn_idx_arrays[index] for index in indices]
+        elif unit == 'char':
+            batch_txt = [self.txt_feat_char[index] for index in indices]
+            batch_txt_labels = [self.char_idx_arrays[index] for index in indices]
+        else:
+            raise
         batch_txt_length = torch.tensor([len(wrd) for wrd in batch_txt], device=device)
         batch_txt_order = np.array(sorted(range(len(batch_txt)), key=lambda k: len(batch_txt[k]), reverse=True))
         batch_txt = np.array(batch_txt)[batch_txt_order]
