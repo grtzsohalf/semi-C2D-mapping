@@ -24,7 +24,7 @@ dec_num_layers=1
 dropout_rate=0.3
 #iter_d=3
 
-weight_r=1.
+weight_r=0.2
 weight_txt_ce=1.
 #weight_g=1.
 #weight_pos_spk=1.
