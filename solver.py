@@ -345,7 +345,7 @@ class Solver:
                    '\npos_paired_loss: ', train_pos_paired_loss, '\nneg_paired_loss: ', train_neg_paired_loss)
 
             # Evaluate for train data
-            train_losses, train_r_loss, train_txt_ce_loss, train_x_loss. \
+            train_losses, train_r_loss, train_txt_ce_loss, train_x_loss, \
                 train_pos_paired_loss, train_neg_paired_loss, train_phn_hiddens, train_txt_hiddens \
                 = self.compute(train_data, 'test')#, result_file=os.path.join(result_dir, f'result_train_{epoch}.pkl'))
         
