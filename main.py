@@ -71,6 +71,9 @@ def add_parser():
     parser.add_argument('--weight_txt_ce',type=float, default=1.,
         metavar='--<weight of txt_ce_loss>',
         help='weight of txt_ce_loss')
+    parser.add_argument('--weight_x',type=float, default=1.,
+        metavar='--<weight of x_loss>',
+        help='weight of x_loss')
     # parser.add_argument('--weight_g',type=float, default=1.,
         # metavar='--<weight of g_loss>',
         # help='weight of g_loss')
@@ -200,7 +203,7 @@ if __name__ == '__main__':
 
     solver = Solver(FLAG.init_lr, FLAG.batch_size, FLAG.seq_len, FLAG.feat_dim, FLAG.p_hidden_dim,
                     FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.dropout_rate, 
-                    FLAG.weight_r, FLAG.weight_txt_ce,
+                    FLAG.weight_r, FLAG.weight_txt_ce, FLAG.weight_x,
                     FLAG.weight_pos_paired, FLAG.weight_neg_paired, 
                     FLAG.top_NN, FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode, FLAG.unit_type)
     solver.build_model(FLAG.neg_thres)

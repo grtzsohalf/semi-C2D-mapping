@@ -252,11 +252,15 @@ class Speech:
     def get_batch_data(self, indices, unit):
         # txt
         if unit == 'phn':
-            batch_txt = [self.txt_feat[index] for index in indices]
-            batch_txt_labels = [self.phn_idx_arrays[index] for index in indices]
+            batch_txt = [self.txt_feat[index] for index in indices] \
+                + [self.txt_feat[index] for index in indices[:len(indices)//2]]
+            batch_txt_labels = [self.phn_idx_arrays[index] for index in indices] \
+                + [self.phn_idx_arrays[index] for index in indices[:len(indices)//2]]
         elif unit == 'char':
-            batch_txt = [self.txt_feat_char[index] for index in indices]
-            batch_txt_labels = [self.char_idx_arrays[index] for index in indices]
+            batch_txt = [self.txt_feat_char[index] for index in indices] \
+                + [self.txt_feat_char[index] for index in indices[:len(indices)//2]]
+            batch_txt_labels = [self.char_idx_arrays[index] for index in indices] \
+                + [self.char_idx_arrays[index] for index in indices[:len(indices)//2]]
         else:
             raise
         batch_txt_length = torch.tensor([len(wrd) for wrd in batch_txt], device=device)
@@ -271,7 +275,7 @@ class Speech:
         batch_data = [self.feat[index] for index in indices]
 
         # randomly select pos & neg
-        pos_neg_indices = indices[:len(batch_data)//2]
+        pos_neg_indices = indices[:len(indices)//2]
 
         # for idx in pos_neg_indices:
             # spk = self.wrd_idx2spk[idx]
