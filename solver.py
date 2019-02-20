@@ -33,7 +33,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Solver:
     def __init__(self, init_lr, batch_size, seq_len, feat_dim, hidden_dim, 
                  enc_num_layers, dec_num_layers, dropout_rate, 
-                 weight_r, weight_txt_ce,
+                 weight_r, weight_txt_ce, weight_x,
                  weight_pos_paired, weight_neg_paired,
                  top_NN, width, weight_LM, log_dir, mode, unit_type):
 
@@ -50,6 +50,7 @@ class Solver:
 
         self.weight_r = weight_r
         self.weight_txt_ce = weight_txt_ce
+        self.weight_x = weight_x
         # self.weight_g = weight_g
         # self.weight_pos_spk = weight_pos_spk
         # self.weight_neg_spk = weight_neg_spk
@@ -154,6 +155,7 @@ class Solver:
         # total_D_losses = 0
         total_r_loss = 0
         total_txt_ce_loss = 0
+        total_x_loss = 0
         # total_g_loss = 0
         # total_pos_spk_loss = 0
         # total_neg_spk_loss = 0
@@ -211,19 +213,19 @@ class Solver:
                 
                 self.model.zero_grad()
 
-                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, \
+                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, x_loss, \
                         pos_paired_loss, neg_paired_loss \
                         = self.model(batch_size, batch_data, batch_length, batch_order, 
                                      batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels) 
                 # G_losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss + self.weight_g * g_loss \
                     # + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss \
                     # + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
-                losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss \
+                losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss + self.weight_x * x_loss \
                     + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
                 losses.backward()
                 optimizer_G.step()
             else:
-                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, \
+                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, x_loss, \
                         pos_paired_loss, neg_paired_loss \
                         = self.model(batch_size, batch_data, batch_length, batch_order, 
                                      batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels) 
@@ -231,7 +233,7 @@ class Solver:
                 # G_losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss + self.weight_g * g_loss \
                     # + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss \
                     # + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
-                losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss \
+                losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss + self.weight_x * x_loss \
                     + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
 
             if mode == 'test' and result_file:
@@ -252,6 +254,7 @@ class Solver:
             # total_D_losses += D_losses.item()
             total_r_loss += r_loss.item()
             total_txt_ce_loss += txt_ce_loss.item()
+            total_x_loss += x_loss.item()
             # total_g_loss += g_loss.item()
             total_pos_paired_loss += pos_paired_loss.item()
             total_neg_paired_loss += neg_paired_loss.item()
@@ -261,7 +264,7 @@ class Solver:
             # del loss, target_output
 
         return total_losses/data.n_batches, total_r_loss/data.n_batches, total_txt_ce_loss/data.n_batches, \
-            total_pos_paired_loss/data.n_batches, total_neg_paired_loss/data.n_batches, \
+            total_x_loss/data.n_batches, total_pos_paired_loss/data.n_batches, total_neg_paired_loss/data.n_batches, \
             total_phn_hiddens, total_txt_hiddens
 
 
@@ -326,22 +329,23 @@ class Solver:
             print ('\nEpoch: ', epoch)
             # Train
             print (' ')
-            train_losses, train_r_loss, train_txt_ce_loss, \
+            train_losses, train_r_loss, train_txt_ce_loss, train_x_loss, \
                 train_pos_paired_loss, train_neg_paired_loss, _, _ \
                 = self.compute(train_data, 'train', optimizer_G=optimizer_G)
         
             self.logger.scalar_summary('train_losses/losses', train_losses, epoch)
             self.logger.scalar_summary('train_losses/r_loss', train_r_loss, epoch)
             self.logger.scalar_summary('train_losses/txt_ce_loss', train_txt_ce_loss, epoch)
+            self.logger.scalar_summary('train_losses/x_loss', train_x_loss, epoch)
             self.logger.scalar_summary('train_losses/pos_paired_loss', train_pos_paired_loss, epoch)
-            self.logger.scalar_summary('train_losses/negpaired_loss', train_neg_paired_loss, epoch)
+            self.logger.scalar_summary('train_losses/neg_paired_loss', train_neg_paired_loss, epoch)
 
             print ('Train -----> losses: ',train_losses, 
-                   '\nr_loss:          ', train_r_loss, '\ntxt_r_loss:      ', train_txt_ce_loss, 
+                   '\nr_loss:          ', train_r_loss, '\ntxt_r_loss:      ', train_txt_ce_loss, '\nx_loss:          ', train_x_loss,
                    '\npos_paired_loss: ', train_pos_paired_loss, '\nneg_paired_loss: ', train_neg_paired_loss)
 
             # Evaluate for train data
-            train_losses, train_r_loss, train_txt_ce_loss, \
+            train_losses, train_r_loss, train_txt_ce_loss, train_x_loss. \
                 train_pos_paired_loss, train_neg_paired_loss, train_phn_hiddens, train_txt_hiddens \
                 = self.compute(train_data, 'test')#, result_file=os.path.join(result_dir, f'result_train_{epoch}.pkl'))
         
@@ -360,18 +364,19 @@ class Solver:
 
             # Evaluate for eval data
             print (' ')
-            eval_losses, eval_r_loss, eval_txt_ce_loss, \
+            eval_losses, eval_r_loss, eval_txt_ce_loss, eval_x_loss, \
                 eval_pos_paired_loss, eval_neg_paired_loss, eval_phn_hiddens, _ \
                 = self.compute(test_data, 'test')#, result_file=os.path.join(result_dir, f'result_test_{epoch}.pkl'))
         
             self.logger.scalar_summary('eval_losses/losses', eval_losses, epoch)
             self.logger.scalar_summary('eval_losses/r_loss', eval_r_loss, epoch)
             self.logger.scalar_summary('eval_losses/txt_ce_loss', eval_txt_ce_loss, epoch)
+            self.logger.scalar_summary('eval_losses/x_loss', eval_x_loss, epoch)
             self.logger.scalar_summary('eval_losses/pos_paired_loss', eval_pos_paired_loss, epoch)
             self.logger.scalar_summary('eval_losses/neg_paired_loss', eval_neg_paired_loss, epoch)
 
             print ('Eval -----> losses: ',eval_losses, 
-                   '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, 
+                   '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, '\nx_loss:          ', eval_x_loss,
                    '\npos_paired_loss: ', eval_pos_paired_loss, '\nneg_paired_loss: ', eval_neg_paired_loss)
 
             self.score(test_data, eval_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
@@ -398,12 +403,12 @@ class Solver:
     def evaluate(self, test_data, train_data, result_dir, model_name, print_every=1):
         # Evaluate for train data
         print (' ')
-        train_losses, train_r_loss, train_txt_ce_loss, \
+        train_losses, train_r_loss, train_txt_ce_loss, train_x_loss, \
             train_pos_paired_loss, train_neg_paired_loss, train_phn_hiddens, train_txt_hiddens \
             = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train_{model_name}.pkl'))
 
         print ('Train -----> losses: ',train_losses, 
-               '\nr_loss:          ', train_r_loss, '\ntxt_ce_loss:      ', train_txt_ce_loss, 
+               '\nr_loss:          ', train_r_loss, '\ntxt_ce_loss:      ', train_txt_ce_loss, '\nx_loss:          ', train_x_loss,
                '\npos_paired_loss: ', train_pos_paired_loss, '\nneg_paired_loss: ', train_neg_paired_loss)
     
         unique_train_txt_hiddens = []
@@ -420,12 +425,12 @@ class Solver:
 
         # Evaluate for test data
         print (' ')
-        eval_losses, eval_r_loss, eval_txt_ce_loss, \
+        eval_losses, eval_r_loss, eval_txt_ce_loss, eval_x_loss, \
             eval_pos_paired_loss, eval_neg_paired_loss, eval_phn_hiddens, _ \
             = self.compute(test_data, 'test', result_file=os.path.join(result_dir, f'result_test_{model_name}.pkl'))
 
         print ('Eval -----> losses: ',eval_losses, 
-               '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, 
+               '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, '\nx_loss:          ', eval_x_loss,
                '\npos_paired_loss: ', eval_pos_paired_loss, '\nneg_paired_loss: ', eval_neg_paired_loss)
 
         self.score(test_data, eval_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,

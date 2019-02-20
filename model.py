@@ -122,45 +122,46 @@ class Model(nn.Module):
         # split phn_hiddens
         _, phn_hiddens = self.phn_encoder(aud_emb_feats, aud_lengths)
         phn_hiddens = phn_hiddens[-2:, :, :].transpose(0, 1)
-        phn_hiddens = phn_hiddens[aud_orders]
-        target_phn_hiddens = phn_hiddens[:batch_size, :, :].view(batch_size, -1)
-        paired_phn_hiddens = phn_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
+        ordered_phn_hiddens = phn_hiddens[aud_orders]
+        target_phn_hiddens = ordered_phn_hiddens[:batch_size, :, :].view(batch_size, -1)
+        paired_phn_hiddens = ordered_phn_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
         # pos_phn_hiddens = phn_hiddens[batch_size*2:batch_size*3, :, :].view(batch_size, -1)
         # neg_phn_hiddens = phn_hiddens[batch_size*3:batch_size*4, :, :].view(batch_size, -1)
-        neg_paired_phn_hiddens = phn_hiddens[batch_size*2:, :, :].view(batch_size, -1)
+        neg_paired_phn_hiddens = ordered_phn_hiddens[batch_size*2:, :, :].view(batch_size, -1)
 
         # split spk_hiddens
         _, spk_hiddens = self.spk_encoder(aud_emb_feats, aud_lengths)
         spk_hiddens = spk_hiddens[-2:, :, :].transpose(0, 1)
-        spk_hiddens = spk_hiddens[aud_orders]
-        target_spk_hiddens = spk_hiddens[:batch_size, :, :].view(batch_size, -1)
-        paired_spk_hiddens = spk_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
+        ordered_spk_hiddens = spk_hiddens[aud_orders]
+        target_spk_hiddens = ordered_spk_hiddens[:batch_size, :, :].view(batch_size, -1)
+        paired_spk_hiddens = ordered_spk_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
         # pos_spk_hiddens = spk_hiddens[batch_size*2:batch_size*3, :, :].view(batch_size, -1)
         # neg_spk_hiddens = spk_hiddens[batch_size*3:batch_size*4, :, :].view(batch_size, -1)
-        neg_paired_spk_hiddens = spk_hiddens[batch_size*2:, :, :].view(batch_size, -1)
+        neg_paired_spk_hiddens = ordered_spk_hiddens[batch_size*2:, :, :].view(batch_size, -1)
 
         txt_emb_feats = self.txt_input_MLP(txt_feats)
 
         # split txt_hiddens
         _, txt_hiddens = self.txt_encoder(txt_emb_feats, txt_lengths)
         txt_hiddens = txt_hiddens[-2:, :, :].transpose(0, 1)
-        txt_hiddens = txt_hiddens[txt_orders]
-        target_txt_hiddens = txt_hiddens[:batch_size, :, :].view(batch_size, -1)
-        paired_txt_hiddens = txt_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
+        ordered_txt_hiddens = txt_hiddens[txt_orders]
+        target_txt_hiddens = ordered_txt_hiddens[:batch_size, :, :].view(batch_size, -1)
+        paired_txt_hiddens = ordered_txt_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
 
         ##########
         # decode #
         ##########
 
         # construct aud_decoder hiddens
-        target_concat_hiddens = torch.cat((phn_hiddens[:batch_size, :, :], spk_hiddens[:batch_size, :, :]), -1).transpose(0, 1)
+        target_concat_hiddens = torch.cat((ordered_phn_hiddens[:batch_size, :, :], 
+                                           ordered_spk_hiddens[:batch_size, :, :]), -1).transpose(0, 1)
         aud_state_zeros = torch.zeros_like(target_concat_hiddens, device=device) 
         target_aud_decoder_init_state = target_concat_hiddens.clone()
         for i in range(self.aud_decoder_num_layers-1):
             target_aud_decoder_init_state = torch.cat((target_aud_decoder_init_state, aud_state_zeros), 0)
 
-        paired_concat_hiddens = torch.cat((txt_hiddens[batch_size:batch_size*2, :, :], 
-                                           spk_hiddens[batch_size:batch_size*2, :, :]), -1).transpose(0, 1)
+        paired_concat_hiddens = torch.cat((ordered_txt_hiddens[batch_size:batch_size*2, :, :], 
+                                           ordered_spk_hiddens[batch_size:batch_size*2, :, :]), -1).transpose(0, 1)
         paired_aud_decoder_init_state = paired_concat_hiddens.clone()
         for i in range(self.aud_decoder_num_layers-1):
             paired_aud_decoder_init_state = torch.cat((paired_aud_decoder_init_state, aud_state_zeros), 0)
@@ -181,11 +182,11 @@ class Model(nn.Module):
         aud_reconstructed_paired = self.aud_output_MLP(aud_reconstructed_paired)
 
         # construct txt_decoder hiddens
-        txt_state_zeros = torch.zeros_like(txt_hiddens[:batch_size, :, :].transpose(0, 1), device=device) 
-        target_txt_decoder_init_state = txt_hiddens[:batch_size, :, :].transpose(0, 1).clone()
+        txt_state_zeros = torch.zeros_like(ordered_txt_hiddens[:batch_size, :, :].transpose(0, 1), device=device) 
+        target_txt_decoder_init_state = ordered_txt_hiddens[:batch_size, :, :].transpose(0, 1).clone()
         for i in range(self.txt_decoder_num_layers-1):
             target_txt_decoder_init_state = torch.cat((target_txt_decoder_init_state, txt_state_zeros), 0)
-        paired_txt_decoder_init_state = phn_hiddens[batch_size:batch_size*2, :, :].transpose(0, 1).clone()
+        paired_txt_decoder_init_state = ordered_phn_hiddens[batch_size:batch_size*2, :, :].transpose(0, 1).clone()
         for i in range(self.txt_decoder_num_layers-1):
             paired_txt_decoder_init_state = torch.cat((paired_txt_decoder_init_state, txt_state_zeros), 0)
 
@@ -203,6 +204,79 @@ class Model(nn.Module):
         txt_reconstructed_target = self.txt_output_MLP(txt_reconstructed_target)
         txt_reconstructed_paired = self.txt_output_MLP(txt_reconstructed_paired)
 
+        # x
+
+        # x_aud_reconstrcution
+        concat_hiddens = torch.cat((txt_hiddens, spk_hiddens), -1).transpose(0, 1)
+        aud_state_zeros = torch.zeros_like(concat_hiddens, device=device) 
+        aud_decoder_init_state = concat_hiddens.clone()
+        for i in range(self.aud_decoder_num_layers-1):
+            aud_decoder_init_state = torch.cat((aud_decoder_init_state, aud_state_zeros), 0)
+
+        aud_begin_zeros = torch.zeros_like(aud_emb_feats) 
+        aud_begin_zeros = torch.cat((aud_begin_zeros, aud_begin_zeros), -1)
+        aud_begin_zeros = torch.cat((aud_begin_zeros, aud_begin_zeros), -1)
+        aud_reconstructed, _, _ = self.aud_decoder(inputs=aud_begin_zeros, 
+                                                   encoder_hidden=aud_decoder_init_state, teacher_forcing_ratio=1.)
+
+        aud_reconstructed = torch.stack(aud_reconstructed).transpose(0, 1)
+        aud_reconstructed = self.aud_output_MLP(aud_reconstructed)
+
+        # x_txt_reconstrcution
+        txt_state_zeros = torch.zeros_like(phn_hiddens.transpose(0, 1), device=device) 
+        txt_decoder_init_state = phn_hiddens.transpose(0, 1).clone()
+        for i in range(self.txt_decoder_num_layers-1):
+            txt_decoder_init_state = torch.cat((txt_decoder_init_state, txt_state_zeros), 0)
+
+        txt_begin_zeros = torch.zeros_like(txt_emb_feats) 
+        txt_begin_zeros = torch.cat((txt_begin_zeros, txt_begin_zeros), -1)
+        txt_reconstructed, _, _ = self.txt_decoder(inputs=txt_begin_zeros,
+                                                   encoder_hidden=txt_decoder_init_state, teacher_forcing_ratio=1.)
+
+        txt_reconstructed = torch.stack(txt_reconstructed).transpose(0, 1)
+        txt_reconstructed = self.txt_output_MLP(txt_reconstructed)
+
+        # x_paired
+        x_aud_emb_feats = self.aud_input_MLP(aud_reconstructed)
+        _, x_phn_hiddens = self.phn_encoder(x_aud_emb_feats, aud_lengths)
+        x_phn_hiddens = x_phn_hiddens[-2:, :, :].transpose(0, 1)
+        x_ordered_phn_hiddens = x_phn_hiddens[txt_orders]
+        _, x_spk_hiddens = self.spk_encoder(x_aud_emb_feats, aud_lengths)
+        x_spk_hiddens = x_spk_hiddens[-2:, :, :].transpose(0, 1)
+        x_ordered_spk_hiddens = x_spk_hiddens[txt_orders]
+
+        x_txt_emb_feats = self.txt_input_MLP(txt_reconstructed)
+        _, x_txt_hiddens = self.txt_encoder(x_txt_emb_feats, txt_lengths)
+        x_txt_hiddens = x_txt_hiddens[-2:, :, :].transpose(0, 1)
+        x_ordered_txt_hiddens = x_txt_hiddens[aud_orders]
+
+        x_paired_concat_hiddens = torch.cat((x_ordered_txt_hiddens[batch_size:batch_size*2, :, :], 
+                                             x_ordered_spk_hiddens[batch_size:batch_size*2, :, :]), -1).transpose(0, 1)
+        aud_state_zeros = torch.zeros_like(x_paired_concat_hiddens, device=device) 
+        x_paired_aud_decoder_init_state = x_paired_concat_hiddens.clone()
+        for i in range(self.aud_decoder_num_layers-1):
+            x_paired_aud_decoder_init_state = torch.cat((x_paired_aud_decoder_init_state, aud_state_zeros), 0)
+
+        aud_begin_zeros = torch.zeros_like(aud_emb_feats[:batch_size, :, :]) 
+        aud_begin_zeros = torch.cat((aud_begin_zeros, aud_begin_zeros), -1)
+        aud_begin_zeros = torch.cat((aud_begin_zeros, aud_begin_zeros), -1)
+        x_aud_reconstructed_paired, _, _ = self.aud_decoder(inputs=aud_begin_zeros,
+                                                            encoder_hidden=x_paired_aud_decoder_init_state, teacher_forcing_ratio=1.)
+        x_aud_reconstructed_paired = torch.stack(x_aud_reconstructed_paired).transpose(0, 1)
+        x_aud_reconstructed_paired = self.aud_output_MLP(x_aud_reconstructed_paired)
+
+        txt_state_zeros = torch.zeros_like(x_ordered_phn_hiddens[:batch_size, :, :].transpose(0, 1), device=device) 
+        x_paired_txt_decoder_init_state = x_ordered_phn_hiddens[batch_size:batch_size*2, :, :].transpose(0, 1).clone()
+        for i in range(self.txt_decoder_num_layers-1):
+            x_paired_txt_decoder_init_state = torch.cat((x_paired_txt_decoder_init_state, txt_state_zeros), 0)
+
+        txt_begin_zeros = torch.zeros_like(txt_emb_feats[:batch_size, :, :]) 
+        txt_begin_zeros = torch.cat((txt_begin_zeros, txt_begin_zeros), -1)
+        x_txt_reconstructed_paired, _, _ = self.txt_decoder(inputs=txt_begin_zeros,
+                                                            encoder_hidden=x_paired_txt_decoder_init_state, teacher_forcing_ratio=1.)
+        x_txt_reconstructed_paired = torch.stack(x_txt_reconstructed_paired).transpose(0, 1)
+        x_txt_reconstructed_paired = self.txt_output_MLP(x_txt_reconstructed_paired)
+
         ##################
         # compute losses #
         ##################
@@ -219,6 +293,8 @@ class Model(nn.Module):
             + self.compute_reconstruction_loss(aud_reconstructed_paired, paired_aud_feats, True, paired_aud_lengths)
         txt_CE_loss = self.compute_CE_loss(txt_reconstructed_target, target_txt_labels, True, target_txt_lengths) \
             + self.compute_CE_loss(txt_reconstructed_paired, paired_txt_labels, True, paired_txt_lengths)
+        x_loss = self.compute_reconstruction_loss(x_aud_reconstructed_paired, paired_aud_feats, True, paired_aud_lengths) \
+            + self.compute_CE_loss(x_txt_reconstructed_paired, paired_txt_labels, True, paired_txt_lengths)
         # generation_loss, discrimination_loss, GP_loss \
             # = self.compute_GAN_losses(batch_size, target_phn_hiddens, pos_phn_hiddens, neg_phn_hiddens)
         # pos_speaker_loss, neg_speaker_loss = \
@@ -227,7 +303,7 @@ class Model(nn.Module):
             self.compute_hinge_losses(paired_txt_hiddens, paired_phn_hiddens, neg_paired_phn_hiddens, self.neg_thres)
 
         return target_phn_hiddens, target_spk_hiddens, target_txt_hiddens, \
-            aud_reconstruction_loss, txt_CE_loss, pos_paired_loss, neg_paired_loss
+            aud_reconstruction_loss, txt_CE_loss, x_loss, pos_paired_loss, neg_paired_loss
 
 
 # class A2VwD(nn.Module):

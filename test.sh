@@ -26,6 +26,7 @@ dropout_rate=0.3
 
 weight_r=1.
 weight_txt_ce=1.
+weight_x=0.2
 #weight_g=1.
 #weight_pos_spk=1.
 #weight_neg_spk=1.
@@ -40,9 +41,9 @@ top_NN=100
 width=30
 weight_LM=0.01
 
-model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
-log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
-result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
+model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
+log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
+result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
 
 train_meta_pkl=$feat_dir/processed/timit-train-meta.pkl       # {'prefix': [4620 x drID_spkID_uttID]}
 train_mfcc_pkl=$feat_dir/processed/timit-train-mfcc-nor.pkl   # [4620 x num_of_frames x 39]
@@ -70,7 +71,7 @@ n_epochs=0
 
 python3 $path/main.py --init_lr=$init_lr --batch_size=$batch_size --seq_len=$seq_len --feat_dim=$feat_dim \
   --p_hidden_dim=$hidden_dim --phn_num_layers=$enc_num_layers --dec_num_layers=$dec_num_layers --dropout_rate=$dropout_rate \
-  --weight_r=$weight_r --weight_txt_ce=$weight_txt_ce \
+  --weight_r=$weight_r --weight_txt_ce=$weight_txt_ce --weight_x=$weight_x \
   --weight_pos_paired=$weight_pos_paired --weight_neg_paired=$weight_neg_paired --neg_thres=$neg_thres \
   --top_NN=$top_NN --width=$width --weight_LM=$weight_LM --n_epochs=$n_epochs \
   $train_meta_pkl $train_mfcc_pkl $train_phn_pkl $train_wrd_pkl $train_slb_pkl \
