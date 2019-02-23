@@ -19,8 +19,8 @@ batch_size=16
 seq_len=165
 feat_dim=39
 hidden_dim=256
-enc_num_layers=2
-dec_num_layers=2
+enc_num_layers=1
+dec_num_layers=1
 dropout_rate=0.3
 D_num_layers=3
 iter_d=3
@@ -44,9 +44,9 @@ weight_LM=0.01
 
 mkdir -p $exp_dir
 
-model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
-log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
-result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_g}_${weight_d}_${weight_gp}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_g}_${weight_d}_${weight_gp}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_g}_${weight_d}_${weight_gp}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
 
 mkdir -p $model_dir
 mkdir -p $log_dir

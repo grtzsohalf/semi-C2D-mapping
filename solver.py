@@ -205,6 +205,8 @@ class Solver:
                         D_losses = self.weight_d * d_loss + self.weight_gp * gp_loss
                         D_losses.backward()
                         optimizer_D.step()
+                else:
+                    D_losses = torch.tensor(0., device=device)
 
                 ################
                 # (2) Update G #
