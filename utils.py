@@ -513,11 +513,9 @@ def getNN(top_N, emb1, emb2, words):
     # probs = np.array(probs)
     probs = []
     for e1 in tqdm(emb1):
-        values = np.expand_dims(e1, axis=0) * emb2
-        values = np.sum(values, axis=-1)
-        values = np.exp(values)
-        sum_exps = np.sum(values, axis=-1)
-        probs.append(values / sum_exps)
+        values = np.sum(np.expand_dims(e1, axis=0) * emb2, axis=-1)
+        values = np.exp(values - np.max(values))
+        probs.append(values / np.sum(values, axis=-1))
     probs = np.array(probs)
     # print (probs[:3, :10])
     top_N_index = np.flip(np.argsort(probs, axis=1), axis=1)[:, :top_N]
