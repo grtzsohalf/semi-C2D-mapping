@@ -513,7 +513,7 @@ def getNN(top_N, emb1, emb2, words):
     # probs = np.array(probs)
     probs = []
     for e1 in tqdm(emb1):
-        values = np.sum(np.expand_dims(emb1, axis=0) * emb2, axis=-1)
+        values = np.sum(np.expand_dims(e1, axis=0) * emb2, axis=-1)
         values = np.exp(values)
         sum_exps = np.sum(values, axis=-1, keepdims=True)
         probs.append(values / sum_exps)
