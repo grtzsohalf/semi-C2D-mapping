@@ -13,7 +13,7 @@ from torch import optim
 from torch import autograd
 import torch.nn.functional as F
 
-# from WGAN_GP import FCDiscriminator
+from WGAN_GP import FCDiscriminator
 from model import Model
 from seq2seq import EncoderRNN, DecoderRNN
 from utils import weight_init, write_pkl, Logger, getNN, beam_search
@@ -32,8 +32,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Solver:
     def __init__(self, init_lr, batch_size, seq_len, feat_dim, hidden_dim, 
-                 enc_num_layers, dec_num_layers, dropout_rate, 
-                 weight_r, weight_txt_ce, weight_x,
+                 enc_num_layers, dec_num_layers, dropout_rate, D_num_layers, iter_d, neg_num, 
+                 weight_r, weight_txt_ce, weight_g, weight_d, weight_gp,
                  weight_pos_paired, weight_neg_paired,
                  top_NN, width, weight_LM, log_dir, mode, unit_type):
 
@@ -44,20 +44,20 @@ class Solver:
         self.hidden_dim = hidden_dim
         self.enc_num_layers = enc_num_layers
         self.dec_num_layers = dec_num_layers
-        # self.D_num_layers = D_num_layers
         self.dropout_rate = dropout_rate
-        # self.iter_d = iter_d
+        self.D_num_layers = D_num_layers
+        self.iter_d = iter_d
+        self.neg_num = neg_num
 
         self.weight_r = weight_r
         self.weight_txt_ce = weight_txt_ce
-        self.weight_x = weight_x
-        # self.weight_g = weight_g
+        self.weight_g = weight_g
+        self.weight_d = weight_d
+        self.weight_gp = weight_gp
         # self.weight_pos_spk = weight_pos_spk
         # self.weight_neg_spk = weight_neg_spk
         self.weight_pos_paired = weight_pos_paired
         self.weight_neg_paired = weight_neg_paired
-        # self.weight_d = weight_d
-        # self.weight_gp = weight_gp
 
         self.top_NN = top_NN
         self.width = width
@@ -85,7 +85,7 @@ class Solver:
     # ------------------
     #
 
-    def build_model(self, neg_thres):
+    def build_model(self):
 
         class MLP(nn.Module):
 
@@ -129,12 +129,12 @@ class Solver:
 
         # t2v = A2V(txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1)
 
-        # size of discriminator input = num_directions * p_hidden_dim * 2
-        # discriminator = FCDiscriminator(2*self.hidden_dim*2, self.hidden_dim, self.D_num_layers)
+        # size of discriminator input = num_directions * p_hidden_dim
+        discriminator = FCDiscriminator(2*self.hidden_dim, self.hidden_dim, self.D_num_layers)
 
         # the whole model
         self.model = Model(aud_input_MLP, phn_encoder, spk_encoder, aud_decoder, aud_output_MLP, self.dec_num_layers, 
-                 txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1, neg_thres) 
+                 txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1, discriminator, self.neg_num) 
 
         self.model.to(device)
         # print (next(self.model.parameters()).is_cuda)
@@ -150,19 +150,18 @@ class Solver:
         else:
             self.model.eval()
 
-        total_losses = 0
-        # total_G_losses = 0
-        # total_D_losses = 0
+        # total_losses = 0
+        total_G_losses = 0
+        total_D_losses = 0
         total_r_loss = 0
         total_txt_ce_loss = 0
-        total_x_loss = 0
-        # total_g_loss = 0
+        total_g_loss = 0
+        total_d_loss = 0
+        total_gp_loss = 0
         # total_pos_spk_loss = 0
         # total_neg_spk_loss = 0
         total_pos_paired_loss = 0
         total_neg_paired_loss = 0
-        # total_d_loss = 0
-        # total_gp_loss = 0
 
         total_phn_hiddens = np.array([])
         total_txt_hiddens = np.array([])
@@ -185,56 +184,56 @@ class Solver:
 
             batch_data, batch_length, batch_order, \
                 batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels \
-                = data.get_batch_data(indices, self.unit_type)
+                = data.get_batch_data(indices, self.unit_type, self.neg_num)
 
             if mode == 'train':
-                ################
-                # (1) Update D #
-                ################
-                # for p in self.model.discriminator.parameters(): # reset requires_grad
-                    # p.requires_grad = True # set to False below in G update
 
-                # for _ in range(self.iter_d):
-                    # self.model.discriminator.zero_grad()
+                if self.weight_g != 0.:
+                    ################
+                    # (1) Update D #
+                    ################
+                    for p in self.model.discriminator.parameters(): # reset requires_grad
+                        p.requires_grad = True # set to False below in G update
 
-                    # phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_r_loss, g_loss, d_loss, \
-                        # gp_loss, pos_spk_loss, neg_spk_loss, pos_paired_loss, neg_paired_loss \
-                        # = self.model(batch_size, batch_data, batch_length, batch_order, 
-                                     # batch_txt, batch_txt_length, batch_txt_order, 'train')
-                    # D_losses = self.weight_d * d_loss + self.weight_gp * gp_loss
-                    # D_losses.backward()
-                    # optimizer_D.step()
+                    for _ in range(self.iter_d):
+                        self.model.discriminator.zero_grad()
+
+                        phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, g_loss, d_loss, \
+                            gp_loss, pos_paired_loss, neg_paired_loss \
+                            = self.model(batch_size, batch_data, batch_length, batch_order, 
+                                         batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels)
+                        D_losses = self.weight_d * d_loss + self.weight_gp * gp_loss
+                        D_losses.backward()
+                        optimizer_D.step()
 
                 ################
                 # (2) Update G #
                 ################
-                # for p in self.model.discriminator.parameters():
-                    # p.requires_grad = False # to avoid computation
+                for p in self.model.discriminator.parameters():
+                    p.requires_grad = False # to avoid computation
                 
                 self.model.zero_grad()
 
-                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, x_loss, \
-                        pos_paired_loss, neg_paired_loss \
+                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, g_loss, d_loss, \
+                        gp_loss, pos_paired_loss, neg_paired_loss \
                         = self.model(batch_size, batch_data, batch_length, batch_order, 
                                      batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels) 
-                # G_losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss + self.weight_g * g_loss \
-                    # + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss \
-                    # + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
-                losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss + self.weight_x * x_loss \
+                G_losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss + self.weight_g * g_loss \
                     + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
-                losses.backward()
+                # losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss \
+                    # + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
+                G_losses.backward()
                 optimizer_G.step()
             else:
-                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, x_loss, \
-                        pos_paired_loss, neg_paired_loss \
+                phn_hiddens, spk_hiddens, txt_hiddens, r_loss, txt_ce_loss, g_loss, d_loss, \
+                        gp_loss, pos_paired_loss, neg_paired_loss \
                         = self.model(batch_size, batch_data, batch_length, batch_order, 
                                      batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels) 
-                # D_losses = self.weight_d * d_loss + self.weight_gp * gp_loss
-                # G_losses = self.weight_r * r_loss + self.weight_txt_r * txt_r_loss + self.weight_g * g_loss \
-                    # + self.weight_pos_spk * pos_spk_loss + self.weight_neg_spk * neg_spk_loss \
-                    # + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
-                losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss + self.weight_x * x_loss \
+                D_losses = self.weight_d * d_loss + self.weight_gp * gp_loss
+                G_losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss + self.weight_g * g_loss \
                     + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
+                # losses = self.weight_r * r_loss + self.weight_txt_ce * txt_ce_loss \
+                    # + self.weight_pos_paired * pos_paired_loss + self.weight_neg_paired * neg_paired_loss
 
             if mode == 'test' and result_file:
                 write_pkl([phn_hiddens.cpu().detach().numpy(), 
@@ -249,23 +248,20 @@ class Solver:
                     total_phn_hiddens = phn_hiddens.cpu().detach().numpy()
                     total_txt_hiddens = txt_hiddens.cpu().detach().numpy()
 
-            total_losses += losses.item()
-            # total_G_losses += G_losses.item()
-            # total_D_losses += D_losses.item()
+            # total_losses += losses.item()
+            total_G_losses += G_losses.item()
+            total_D_losses += D_losses.item()
             total_r_loss += r_loss.item()
             total_txt_ce_loss += txt_ce_loss.item()
-            total_x_loss += x_loss.item()
-            # total_g_loss += g_loss.item()
+            total_g_loss += g_loss.item()
             total_pos_paired_loss += pos_paired_loss.item()
             total_neg_paired_loss += neg_paired_loss.item()
-            # total_d_loss += d_loss.item()
-            # total_gp_loss += gp_loss.item()
+            total_d_loss += d_loss.item()
+            total_gp_loss += gp_loss.item()
 
             # del loss, target_output
 
-        return total_losses/data.n_batches, total_r_loss/data.n_batches, total_txt_ce_loss/data.n_batches, \
-            total_x_loss/data.n_batches, total_pos_paired_loss/data.n_batches, total_neg_paired_loss/data.n_batches, \
-            total_phn_hiddens, total_txt_hiddens
+        return total_G_losses/data.n_batches, total_D_losses/data.n_batches, total_r_loss/data.n_batches, total_txt_ce_loss/data.n_batches, total_g_loss/data.n_batches, total_d_loss/data.n_batches, total_gp_loss/data.n_batches, total_pos_paired_loss/data.n_batches, total_neg_paired_loss/data.n_batches, total_phn_hiddens, total_txt_hiddens
 
 
     ######################################################################
@@ -320,8 +316,12 @@ class Solver:
 
     def train_iters(self, train_data, test_data, saver, n_epochs, global_step, result_dir, print_every=1):
         # optimizer = optim.Adam(self.model.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
-        # optimizer_D = optim.Adam(self.model.discriminator.parameters(), lr=self.init_lr, betas=(0.5, 0.9))
-        optimizer_G = optim.Adam([{'params': self.model.parameters()}],
+        optimizer_D = optim.Adam(self.model.discriminator.parameters(), lr=self.init_lr, betas=(0.5, 0.95))
+        # print (self.model.discriminator.parameters())
+        other_params = []
+        for m in self.model.other_parts:
+            other_params += list(m.parameters())
+        optimizer_G = optim.Adam(other_params,
                                   lr=self.init_lr, betas=(0.5, 0.95))
 
         for epoch in range(global_step+1, global_step+1+n_epochs):
@@ -329,23 +329,27 @@ class Solver:
             print ('\nEpoch: ', epoch)
             # Train
             print (' ')
-            train_losses, train_r_loss, train_txt_ce_loss, train_x_loss, \
+            train_G_losses, train_D_losses, train_r_loss, train_txt_ce_loss, train_g_loss, train_d_loss, train_gp_loss, \
                 train_pos_paired_loss, train_neg_paired_loss, _, _ \
-                = self.compute(train_data, 'train', optimizer_G=optimizer_G)
+                = self.compute(train_data, 'train', optimizer_G=optimizer_G, optimizer_D=optimizer_D)
         
-            self.logger.scalar_summary('train_losses/losses', train_losses, epoch)
+            self.logger.scalar_summary('train_losses/G_losses', train_G_losses, epoch)
+            self.logger.scalar_summary('train_losses/D_losses', train_D_losses, epoch)
             self.logger.scalar_summary('train_losses/r_loss', train_r_loss, epoch)
             self.logger.scalar_summary('train_losses/txt_ce_loss', train_txt_ce_loss, epoch)
-            self.logger.scalar_summary('train_losses/x_loss', train_x_loss, epoch)
+            self.logger.scalar_summary('train_losses/g_loss', train_g_loss, epoch)
+            self.logger.scalar_summary('train_losses/d_loss', train_d_loss, epoch)
+            self.logger.scalar_summary('train_losses/gp_loss', train_gp_loss, epoch)
             self.logger.scalar_summary('train_losses/pos_paired_loss', train_pos_paired_loss, epoch)
             self.logger.scalar_summary('train_losses/neg_paired_loss', train_neg_paired_loss, epoch)
 
-            print ('Train -----> losses: ',train_losses, 
-                   '\nr_loss:          ', train_r_loss, '\ntxt_r_loss:      ', train_txt_ce_loss, '\nx_loss:          ', train_x_loss,
+            print ('Train -----> G_losses: ', train_G_losses, 'D_losses: ', train_D_losses,
+                   '\nr_loss:          ', train_r_loss, '\ntxt_ce_loss:      ', train_txt_ce_loss, 
+                   '\ng_loss:          ', train_g_loss, '\nd_loss:          ', train_d_loss, '\ngp_loss:         ', train_gp_loss, 
                    '\npos_paired_loss: ', train_pos_paired_loss, '\nneg_paired_loss: ', train_neg_paired_loss)
 
             # Evaluate for train data
-            train_losses, train_r_loss, train_txt_ce_loss, train_x_loss, \
+            train_G_losses, train_D_losses, train_r_loss, train_txt_ce_loss, train_g_loss, train_d_loss, train_gp_loss, \
                 train_pos_paired_loss, train_neg_paired_loss, train_phn_hiddens, train_txt_hiddens \
                 = self.compute(train_data, 'test')#, result_file=os.path.join(result_dir, f'result_train_{epoch}.pkl'))
         
@@ -365,19 +369,23 @@ class Solver:
 
             # Evaluate for eval data
             print (' ')
-            eval_losses, eval_r_loss, eval_txt_ce_loss, eval_x_loss, \
+            eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_ce_loss, eval_g_loss, eval_d_loss, eval_gp_loss, \
                 eval_pos_paired_loss, eval_neg_paired_loss, eval_phn_hiddens, _ \
                 = self.compute(test_data, 'test')#, result_file=os.path.join(result_dir, f'result_test_{epoch}.pkl'))
         
-            self.logger.scalar_summary('eval_losses/losses', eval_losses, epoch)
+            self.logger.scalar_summary('eval_losses/G_losses', eval_G_losses, epoch)
+            self.logger.scalar_summary('eval_losses/D_losses', eval_D_losses, epoch)
             self.logger.scalar_summary('eval_losses/r_loss', eval_r_loss, epoch)
             self.logger.scalar_summary('eval_losses/txt_ce_loss', eval_txt_ce_loss, epoch)
-            self.logger.scalar_summary('eval_losses/x_loss', eval_x_loss, epoch)
+            self.logger.scalar_summary('eval_losses/g_loss', eval_g_loss, epoch)
+            self.logger.scalar_summary('eval_losses/d_loss', eval_d_loss, epoch)
+            self.logger.scalar_summary('eval_losses/gp_loss', eval_gp_loss, epoch)
             self.logger.scalar_summary('eval_losses/pos_paired_loss', eval_pos_paired_loss, epoch)
             self.logger.scalar_summary('eval_losses/neg_paired_loss', eval_neg_paired_loss, epoch)
 
-            print ('Eval -----> losses: ',eval_losses, 
-                   '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, '\nx_loss:          ', eval_x_loss,
+            print ('Eval -----> G_losses: ', eval_G_losses, 'D_losses: ', eval_D_losses,
+                   '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, 
+                   '\ng_loss:          ', eval_g_loss, '\nd_loss:          ', eval_d_loss, '\ngp_loss:         ', eval_gp_loss, 
                    '\npos_paired_loss: ', eval_pos_paired_loss, '\nneg_paired_loss: ', eval_neg_paired_loss)
 
             self.score(test_data, eval_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
@@ -404,12 +412,13 @@ class Solver:
     def evaluate(self, test_data, train_data, result_dir, model_name, print_every=1):
         # Evaluate for train data
         print (' ')
-        train_losses, train_r_loss, train_txt_ce_loss, train_x_loss, \
+        train_G_losses, train_D_losses, train_r_loss, train_txt_ce_loss, train_g_loss, train_d_loss, train_gp_loss, \
             train_pos_paired_loss, train_neg_paired_loss, train_phn_hiddens, train_txt_hiddens \
             = self.compute(train_data, 'test', result_file=os.path.join(result_dir, f'result_train_{model_name}.pkl'))
 
-        print ('Train -----> losses: ',train_losses, 
-               '\nr_loss:          ', train_r_loss, '\ntxt_ce_loss:      ', train_txt_ce_loss, '\nx_loss:          ', train_x_loss,
+        print ('Train -----> G_losses: ', train_G_losses, 'D_losses: ', train_D_losses,
+               '\nr_loss:          ', train_r_loss, '\ntxt_ce_loss:      ', train_txt_ce_loss, 
+               '\ng_loss:          ', train_g_loss, '\nd_loss:          ', train_d_loss, '\ngp_loss:         ', train_gp_loss, 
                '\npos_paired_loss: ', train_pos_paired_loss, '\nneg_paired_loss: ', train_neg_paired_loss)
     
         unique_train_txt_hiddens = []
@@ -426,12 +435,13 @@ class Solver:
 
         # Evaluate for test data
         print (' ')
-        eval_losses, eval_r_loss, eval_txt_ce_loss, eval_x_loss, \
+        eval_G_losses, eval_D_losses, eval_r_loss, eval_txt_ce_loss, eval_g_loss, eval_d_loss, eval_gp_loss, \
             eval_pos_paired_loss, eval_neg_paired_loss, eval_phn_hiddens, _ \
             = self.compute(test_data, 'test', result_file=os.path.join(result_dir, f'result_test_{model_name}.pkl'))
 
-        print ('Eval -----> losses: ',eval_losses, 
-               '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss, '\nx_loss:          ', eval_x_loss,
+        print ('Eval -----> G_losses: ', eval_G_losses, 'D_losses: ', eval_D_losses,
+               '\nr_loss:          ', eval_r_loss, '\ntxt_ce_loss:      ', eval_txt_ce_loss,
+               '\ng_loss:          ', eval_g_loss, '\nd_loss:          ', eval_d_loss, '\ngp_loss:         ', eval_gp_loss, 
                '\npos_paired_loss: ', eval_pos_paired_loss, '\nneg_paired_loss: ', eval_neg_paired_loss)
 
         self.score(test_data, eval_phn_hiddens, unique_train_txt_hiddens, unique_train_wrds,
