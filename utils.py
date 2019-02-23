@@ -505,18 +505,18 @@ def getNN(top_N, emb1, emb2, words):
     # cos_sim = np.dot(emb1, emb2.T)
     # top_N_index = np.flip(np.argsort(cos_sim, axis=1), axis=1)[:, :top_N]
 
-    # probs = []
-    # for e1 in tqdm(emb1):
-        # diff_norm_exps = np.exp(-np.linalg.norm(np.expand_dims(e1, axis=0) - emb2, axis=1))
-        # sum_exps = np.sum(diff_norm_exps)
-        # probs.append(diff_norm_exps / sum_exps)
-    # probs = np.array(probs)
     probs = []
     for e1 in tqdm(emb1):
-        values = np.sum(np.expand_dims(e1, axis=0) * emb2, axis=-1)
-        values = np.exp(values - np.max(values))
-        probs.append(values / np.sum(values, axis=-1))
+        diff_norm_exps = np.exp(-np.linalg.norm(np.expand_dims(e1, axis=0) - emb2, axis=1))
+        sum_exps = np.sum(diff_norm_exps)
+        probs.append(diff_norm_exps / sum_exps)
     probs = np.array(probs)
+    # probs = []
+    # for e1 in tqdm(emb1):
+        # values = np.sum(np.expand_dims(e1, axis=0) * emb2, axis=-1)
+        # values = np.exp(values - np.max(values))
+        # probs.append(values / np.sum(values, axis=-1))
+    # probs = np.array(probs)
     # print (probs[:3, :10])
     top_N_index = np.flip(np.argsort(probs, axis=1), axis=1)[:, :top_N]
 

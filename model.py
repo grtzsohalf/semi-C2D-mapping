@@ -113,6 +113,19 @@ class Model(nn.Module):
         log_probs = F.log_softmax(dot_values, dim=-1)
         return torch.mean(-log_probs[:, 0])
 
+    def compute_hinge_losses(self, target, pos, neg, neg_thres=0.01):
+        # pairs of (target, pos) -> as close as possible
+        # pairs of (target, neg) -> far from each other to an extent
+        # pos_speaker_loss = self.compute_reconstruction_loss(target, pos, False)
+        # MSE_criterion = nn.MSELoss(reduction='none')
+        # hinge_criterion = nn.HingeEmbeddingLoss(margin=0.01)
+        # neg_speaker_loss = hinge_criterion(MSE_criterion(target, neg), 
+                                           # -torch.ones(target.shape[0], device=device))
+        neg = neg.view(-1, neg.size(-1))
+        pos_loss = torch.mean((target - pos) ** 2)
+        neg_loss = torch.mean(torch.clamp(neg_thres - torch.mean((target - neg) ** 2, dim=-1), min=0.)) 
+        return pos_loss, neg_loss
+
     def compute_CE_loss(self, x, y, mask, lengths=None):
         def _sequence_mask(sequence_length, max_len=None):
             if max_len is None:
@@ -319,11 +332,11 @@ class Model(nn.Module):
             = self.compute_GAN_losses(batch_size, target_phn_hiddens, target_txt_hiddens)
         # pos_speaker_loss, neg_speaker_loss = \
             # self.compute_hinge_losses(target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens, self.pos_thres, self.neg_thres)
-        NCE_loss = \
-            self.compute_NCE_losses(paired_txt_hiddens, paired_phn_hiddens, neg_paired_phn_hiddens)
+        pos_paired_loss, neg_paired_loss = \
+            self.compute_hinge_losses(paired_txt_hiddens, paired_phn_hiddens, neg_paired_phn_hiddens)
 
         return target_phn_hiddens, target_spk_hiddens, target_txt_hiddens, \
-            aud_reconstruction_loss, txt_CE_loss, generation_loss, discrimination_loss, GP_loss, NCE_loss, torch.tensor(0., device=device)
+            aud_reconstruction_loss, txt_CE_loss, generation_loss, discrimination_loss, GP_loss, pos_paired_loss, neg_paired_loss
 
 
 # class A2VwD(nn.Module):
