@@ -19,22 +19,21 @@ batch_size=32
 seq_len=165
 feat_dim=39
 hidden_dim=256
-enc_num_layers=1
-dec_num_layers=1
-#D_num_layers=3
+enc_num_layers=2
+dec_num_layers=2
 dropout_rate=0.3
-#iter_d=3
+D_num_layers=3
+iter_d=3
 
 weight_r=0.2
 weight_txt_ce=1.
-weight_x=0.2
-#weight_g=1.
+weight_g=1.
+weight_d=1.
+weight_gp=1.
 #weight_pos_spk=1.
 #weight_neg_spk=1.
 weight_pos_paired=5.
 weight_neg_paired=5.
-#weight_d=1.
-#weight_gp=1.
 #pos_thres=0.01
 neg_thres=0.01
 
@@ -44,9 +43,9 @@ weight_LM=0.01
 
 mkdir -p $exp_dir
 
-model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
-log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
-result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}
+model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}_GAN2
+log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}_GAN2
+result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}_GAN2
 
 mkdir -p $model_dir
 mkdir -p $log_dir
@@ -77,7 +76,8 @@ mode=train
 
 python3 $path/main.py --init_lr=$init_lr --batch_size=$batch_size --seq_len=$seq_len --feat_dim=$feat_dim \
   --p_hidden_dim=$hidden_dim --phn_num_layers=$enc_num_layers --dec_num_layers=$dec_num_layers --dropout_rate=$dropout_rate \
-  --weight_r=$weight_r --weight_txt_ce=$weight_txt_ce --weight_x=$weight_x \
+  --D_num_layers=$D_num_layers --iter_d=$iter_d \
+  --weight_r=$weight_r --weight_txt_ce=$weight_txt_ce --weight_g=$weight_g --weight_d=$weight_d --weight_gp=$weight_gp \
   --weight_pos_paired=$weight_pos_paired --weight_neg_paired=$weight_neg_paired --neg_thres=$neg_thres \
   --top_NN=$top_NN --width=$width --weight_LM=$weight_LM --n_epochs=$n_epochs \
   $train_meta_pkl $train_mfcc_pkl $train_phn_pkl $train_wrd_pkl $train_slb_pkl \
