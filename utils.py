@@ -511,11 +511,14 @@ def getNN(top_N, emb1, emb2, words):
         # sum_exps = np.sum(diff_norm_exps)
         # probs.append(diff_norm_exps / sum_exps)
     # probs = np.array(probs)
+    probs = []
+    for e1 in tqdm(emb1):
+        values = np.sum(np.expand_dims(emb1, axis=0) * emb2, axis=-1)
+        values = np.exp(values)
+        sum_exps = np.sum(values, axis=-1, keepdims=True)
+        probs.append(values / sum_exps)
+    probs = np.array(probs)
     # print (probs[:3, :10])
-    values = np.sum(np.expand_dims(emb1, axis=1) * np.tile(emb2, (len(emb1), 1, 1)), axis=-1)
-    values = np.exp(values)
-    sum_exps = np.sum(values, axis=-1, keepdims=True)
-    probs = values / sum_exps
     top_N_index = np.flip(np.argsort(probs, axis=1), axis=1)[:, :top_N]
 
     # print (f'Time cost of getNN: {time.time() - start_time}')
