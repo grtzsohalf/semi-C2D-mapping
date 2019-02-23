@@ -19,7 +19,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Model(nn.Module):
 
     def __init__(self, aud_input_MLP, phn_encoder, spk_encoder, aud_decoder, aud_output_MLP, aud_decoder_num_layers, 
-                 txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, txt_decoder_num_layers, neg_thres, discriminator):
+                 txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, txt_decoder_num_layers, discriminator, neg_num):
         super(Model, self).__init__()
         self.aud_input_MLP = aud_input_MLP
         self.phn_encoder = phn_encoder
@@ -35,11 +35,12 @@ class Model(nn.Module):
         self.txt_decoder_num_layers = txt_decoder_num_layers
         # self.t2v = t2v
         # self.pos_thres = pos_thres
-        self.neg_thres = neg_thres
 
         self.discriminator = discriminator
         self.other_parts = [self.aud_input_MLP, self.phn_encoder, self.spk_encoder, self.aud_decoder, self.aud_output_MLP,
                             self.txt_input_MLP, self.txt_encoder, self.txt_decoder, self.txt_output_MLP]
+
+        self.neg_num = neg_num
 
     def flatten_parameters(self):
         self.phn_encoder.flatten_parameters()
@@ -96,7 +97,7 @@ class Model(nn.Module):
         GP_loss = calc_gradient_penalty(batch_size, self.discriminator, phn, txt)
         return generation_loss, discrimination_loss, GP_loss
 
-    def compute_hinge_losses(self, target, pos, neg, neg_thres):
+    def compute_NCE_losses(self, target, pos, neg):
         # pairs of (target, pos) -> as close as possible
         # pairs of (target, neg) -> far from each other to an extent
         # pos_speaker_loss = self.compute_reconstruction_loss(target, pos, False)
@@ -104,9 +105,13 @@ class Model(nn.Module):
         # hinge_criterion = nn.HingeEmbeddingLoss(margin=0.01)
         # neg_speaker_loss = hinge_criterion(MSE_criterion(target, neg), 
                                            # -torch.ones(target.shape[0], device=device))
-        pos_loss = torch.mean((target - pos) ** 2)
-        neg_loss = torch.mean(torch.clamp(neg_thres - torch.mean((target - neg) ** 2, dim=-1), min=0.)) 
-        return pos_loss, neg_loss
+        # pos_loss = torch.mean((target - pos) ** 2)
+        # neg_loss = torch.mean(torch.clamp(neg_thres - torch.mean((target - neg) ** 2, dim=-1), min=0.)) 
+        target = torch.unsqueeze(target, 1)
+        pos = torch.unsqueeze(pos, 1)
+        dot_values = torch.sum(torch.cat((pos, neg), 1) * target, -1)
+        log_probs = F.log_softmax(dot_values, dim=-1)
+        return torch.mean(-log_probs[:, 0])
 
     def compute_CE_loss(self, x, y, mask, lengths=None):
         def _sequence_mask(sequence_length, max_len=None):
@@ -142,7 +147,7 @@ class Model(nn.Module):
         paired_phn_hiddens = ordered_phn_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
         # pos_phn_hiddens = phn_hiddens[batch_size*2:batch_size*3, :, :].view(batch_size, -1)
         # neg_phn_hiddens = phn_hiddens[batch_size*3:batch_size*4, :, :].view(batch_size, -1)
-        neg_paired_phn_hiddens = ordered_phn_hiddens[batch_size*2:, :, :].view(batch_size, -1)
+        neg_paired_phn_hiddens = ordered_phn_hiddens[batch_size*2:, :, :].view(self.neg_num, batch_size, -1).transpose(0, 1)
 
         # split spk_hiddens
         _, spk_hiddens = self.spk_encoder(aud_emb_feats, aud_lengths)
@@ -152,7 +157,7 @@ class Model(nn.Module):
         paired_spk_hiddens = ordered_spk_hiddens[batch_size:batch_size*2, :, :].view(batch_size, -1)
         # pos_spk_hiddens = spk_hiddens[batch_size*2:batch_size*3, :, :].view(batch_size, -1)
         # neg_spk_hiddens = spk_hiddens[batch_size*3:batch_size*4, :, :].view(batch_size, -1)
-        neg_paired_spk_hiddens = ordered_spk_hiddens[batch_size*2:, :, :].view(batch_size, -1)
+        neg_paired_spk_hiddens = ordered_spk_hiddens[batch_size*2:, :, :].view(self.neg_num, batch_size, -1).transpose(0, 1)
 
         txt_emb_feats = self.txt_input_MLP(txt_feats)
 
@@ -314,11 +319,11 @@ class Model(nn.Module):
             = self.compute_GAN_losses(batch_size, target_phn_hiddens, target_txt_hiddens)
         # pos_speaker_loss, neg_speaker_loss = \
             # self.compute_hinge_losses(target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens, self.pos_thres, self.neg_thres)
-        pos_paired_loss, neg_paired_loss = \
-            self.compute_hinge_losses(paired_txt_hiddens, paired_phn_hiddens, neg_paired_phn_hiddens, self.neg_thres)
+        NCE_loss = \
+            self.compute_NCE_losses(paired_txt_hiddens, paired_phn_hiddens, neg_paired_phn_hiddens)
 
         return target_phn_hiddens, target_spk_hiddens, target_txt_hiddens, \
-            aud_reconstruction_loss, txt_CE_loss, generation_loss, discrimination_loss, GP_loss, pos_paired_loss, neg_paired_loss
+            aud_reconstruction_loss, txt_CE_loss, generation_loss, discrimination_loss, GP_loss, NCE_loss, torch.tensor(0., device=device)
 
 
 # class A2VwD(nn.Module):

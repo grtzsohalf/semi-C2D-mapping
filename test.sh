@@ -14,7 +14,7 @@ num_paired=$2
 unit_type=$3
 
 init_lr=0.0001
-batch_size=32
+batch_size=16
 seq_len=165
 feat_dim=39
 hidden_dim=256
@@ -23,6 +23,7 @@ dec_num_layers=1
 dropout_rate=0.3
 D_num_layers=3
 iter_d=3
+neg_num=4
 
 weight_r=1.
 weight_txt_ce=1.
@@ -40,9 +41,9 @@ top_NN=100
 width=30
 weight_LM=0.01
 
-model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}_GAN2
-log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}_GAN2
-result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_thres}_GAN2
+model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_r}_${weight_txt_ce}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
 
 train_meta_pkl=$feat_dir/processed/timit-train-meta.pkl       # {'prefix': [4620 x drID_spkID_uttID]}
 train_mfcc_pkl=$feat_dir/processed/timit-train-mfcc-nor.pkl   # [4620 x num_of_frames x 39]
@@ -70,9 +71,9 @@ n_epochs=0
 
 python3 $path/main.py --init_lr=$init_lr --batch_size=$batch_size --seq_len=$seq_len --feat_dim=$feat_dim \
   --p_hidden_dim=$hidden_dim --phn_num_layers=$enc_num_layers --dec_num_layers=$dec_num_layers --dropout_rate=$dropout_rate \
-  --D_num_layers=$D_num_layers --iter_d=$iter_d \
+  --D_num_layers=$D_num_layers --iter_d=$iter_d --neg_num=$neg_num \
   --weight_r=$weight_r --weight_txt_ce=$weight_txt_ce --weight_g=$weight_g --weight_d=$weight_d --weight_gp=$weight_gp \
-  --weight_pos_paired=$weight_pos_paired --weight_neg_paired=$weight_neg_paired --neg_thres=$neg_thres \
+  --weight_pos_paired=$weight_pos_paired --weight_neg_paired=$weight_neg_paired \
   --top_NN=$top_NN --width=$width --weight_LM=$weight_LM --n_epochs=$n_epochs \
   $train_meta_pkl $train_mfcc_pkl $train_phn_pkl $train_wrd_pkl $train_slb_pkl \
   $test_meta_pkl $test_mfcc_pkl $test_phn_pkl $test_wrd_pkl $test_slb_pkl \

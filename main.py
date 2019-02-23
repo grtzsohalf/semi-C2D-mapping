@@ -64,6 +64,9 @@ def add_parser():
     parser.add_argument('--iter_d',type=int, default=3,
         metavar='--<num_iterations of D while updating G once>',
         help='num_iterations of D while updating G once')
+    parser.add_argument('--neg_num',type=int, default=4,
+        metavar='--<number of negative samples>',
+        help='number of negative samples')
 
     parser.add_argument('--weight_r',type=float, default=1.,
         metavar='--<weight of r_loss>',
@@ -95,9 +98,9 @@ def add_parser():
     # parser.add_argument('--pos_thres',type=float, default=0.01,
         # metavar='--<threshold of positive paired loss>',
         # help='threshold of positive paired loss')
-    parser.add_argument('--neg_thres',type=float, default=0.01,
-        metavar='--<threshold of negative paired loss>',
-        help='threshold of negative paired loss')
+    # parser.add_argument('--neg_thres',type=float, default=0.01,
+        # metavar='--<threshold of negative paired loss>',
+        # help='threshold of negative paired loss')
 
     parser.add_argument('--top_NN',type=int, default=100,
         metavar='--<number of top nearest neighbors>',
@@ -199,11 +202,11 @@ if __name__ == '__main__':
     #
 
     solver = Solver(FLAG.init_lr, FLAG.batch_size, FLAG.seq_len, FLAG.feat_dim, FLAG.p_hidden_dim,
-                    FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.dropout_rate, FLAG.D_num_layers, FLAG.iter_d, 
+                    FLAG.phn_num_layers, FLAG.dec_num_layers, FLAG.dropout_rate, FLAG.D_num_layers, FLAG.iter_d, FLAG.neg_num, 
                     FLAG.weight_r, FLAG.weight_txt_ce, FLAG.weight_g, FLAG.weight_d, FLAG.weight_gp,
                     FLAG.weight_pos_paired, FLAG.weight_neg_paired, 
                     FLAG.top_NN, FLAG.width, FLAG.weight_LM, FLAG.log_dir, FLAG.mode, FLAG.unit_type)
-    solver.build_model(FLAG.neg_thres)
+    solver.build_model()
     print ("Solver constructed!")
 
 

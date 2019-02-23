@@ -32,7 +32,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Solver:
     def __init__(self, init_lr, batch_size, seq_len, feat_dim, hidden_dim, 
-                 enc_num_layers, dec_num_layers, dropout_rate, D_num_layers, iter_d, 
+                 enc_num_layers, dec_num_layers, dropout_rate, D_num_layers, iter_d, neg_num, 
                  weight_r, weight_txt_ce, weight_g, weight_d, weight_gp,
                  weight_pos_paired, weight_neg_paired,
                  top_NN, width, weight_LM, log_dir, mode, unit_type):
@@ -47,6 +47,7 @@ class Solver:
         self.dropout_rate = dropout_rate
         self.D_num_layers = D_num_layers
         self.iter_d = iter_d
+        self.neg_num = neg_num
 
         self.weight_r = weight_r
         self.weight_txt_ce = weight_txt_ce
@@ -84,7 +85,7 @@ class Solver:
     # ------------------
     #
 
-    def build_model(self, neg_thres):
+    def build_model(self):
 
         class MLP(nn.Module):
 
@@ -133,7 +134,7 @@ class Solver:
 
         # the whole model
         self.model = Model(aud_input_MLP, phn_encoder, spk_encoder, aud_decoder, aud_output_MLP, self.dec_num_layers, 
-                 txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1, neg_thres, discriminator) 
+                 txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, 1, discriminator, self.neg_num) 
 
         self.model.to(device)
         # print (next(self.model.parameters()).is_cuda)
@@ -183,7 +184,7 @@ class Solver:
 
             batch_data, batch_length, batch_order, \
                 batch_txt, batch_txt_length, batch_txt_order, batch_txt_labels \
-                = data.get_batch_data(indices, self.unit_type)
+                = data.get_batch_data(indices, self.unit_type, self.neg_num)
 
             if mode == 'train':
                 ################

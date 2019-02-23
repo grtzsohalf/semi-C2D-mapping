@@ -249,7 +249,7 @@ class Speech:
 
         return 
 
-    def get_batch_data(self, indices, unit):
+    def get_batch_data(self, indices, unit, neg_num):
         # txt
         if unit == 'phn':
             batch_txt = [self.txt_feat[index] for index in indices] \
@@ -295,14 +295,15 @@ class Speech:
             # batch_data.append(self.feat[idx_neg])
 
         # neg paired
-        for idx in pos_neg_indices:
-            wrd = self.wrds[idx]
-            neg_paired_index = idx
-            neg_paired_wrd = wrd
-            while neg_paired_wrd == wrd:
-                neg_paired_index = random.randint(0, len(self.wrds)-1)
-                neg_paired_wrd = self.wrds[neg_paired_index]
-            batch_data.append(self.feat[neg_paired_index])
+        for i in range(neg_num):
+            for idx in pos_neg_indices:
+                wrd = self.wrds[idx]
+                neg_paired_index = idx
+                neg_paired_wrd = wrd
+                while neg_paired_wrd == wrd:
+                    neg_paired_index = random.randint(0, len(self.wrds)-1)
+                    neg_paired_wrd = self.wrds[neg_paired_index]
+                batch_data.append(self.feat[neg_paired_index])
 
 
         batch_length = torch.tensor([len(wrd) for wrd in batch_data], device=device)
