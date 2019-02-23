@@ -175,7 +175,7 @@ class Solver:
         else:
             total_indices_paired = np.arange(min(data.num_paired, data.n_total_wrds))
 
-        # for i in tqdm(range(data.n_batches-1, data.n_batches)):
+        # for i in tqdm(range(data.n_batches-50, data.n_batches)):
         for i in tqdm(range(data.n_batches)):
             indices = total_indices[i*self.batch_size:(i+1)*self.batch_size]
             batch_size = len(indices)
