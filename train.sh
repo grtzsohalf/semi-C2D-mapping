@@ -15,7 +15,7 @@ n_epochs=$3
 unit_type=$4
 
 init_lr=0.0001
-batch_size=16
+batch_size=32
 seq_len=165
 feat_dim=39
 hidden_dim=256

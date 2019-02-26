@@ -86,6 +86,7 @@ class Model(nn.Module):
         # return generation_loss, discrimination_loss, GP_loss
 
     def compute_GAN_losses(self, batch_size, phn, txt):
+        phn = phn.view(batch_size, -1)
         # # using WGAN-GP
         pos_score = self.discriminator(phn)
         neg_score = self.discriminator(txt)
@@ -329,7 +330,7 @@ class Model(nn.Module):
         # x_loss = self.compute_reconstruction_loss(x_aud_reconstructed_paired, paired_aud_feats, True, paired_aud_lengths) \
             # + self.compute_CE_loss(x_txt_reconstructed_paired, paired_txt_labels, True, paired_txt_lengths)
         generation_loss, discrimination_loss, GP_loss \
-            = self.compute_GAN_losses(batch_size, target_phn_hiddens, target_txt_hiddens)
+            = self.compute_GAN_losses(batch_size, neg_paired_phn_hiddens, target_txt_hiddens)
         # pos_speaker_loss, neg_speaker_loss = \
             # self.compute_hinge_losses(target_spk_hiddens, pos_spk_hiddens, neg_spk_hiddens, self.pos_thres, self.neg_thres)
         pos_paired_loss, neg_paired_loss = \
