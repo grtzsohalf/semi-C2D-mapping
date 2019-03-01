@@ -45,8 +45,8 @@ class Solver:
         self.enc_num_layers = enc_num_layers
         self.dec_num_layers = dec_num_layers
         self.dropout_rate = dropout_rate
-        self.D_num_layers = D_num_layers
-        self.iter_d = iter_d
+        # self.D_num_layers = D_num_layers
+        # self.iter_d = iter_d
         self.neg_num = neg_num
 
         # self.weight_g = weight_g

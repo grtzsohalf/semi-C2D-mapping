@@ -19,7 +19,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Model(nn.Module):
 
     def __init__(self, aud_input_MLP, phn_encoder, spk_encoder, aud_decoder, aud_output_MLP, aud_decoder_num_layers, 
-                 txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, txt_decoder_num_layers, neg_thres, if_x, neg_num):
+                 txt_input_MLP, txt_encoder, txt_decoder, txt_output_MLP, txt_decoder_num_layers, if_x, neg_num):
         super(Model, self).__init__()
         self.aud_input_MLP = aud_input_MLP
         self.phn_encoder = phn_encoder
@@ -39,7 +39,6 @@ class Model(nn.Module):
         # self.other_parts = [self.aud_input_MLP, self.phn_encoder, self.spk_encoder, self.aud_decoder, self.aud_output_MLP,
                             # self.txt_input_MLP, self.txt_encoder, self.txt_decoder, self.txt_output_MLP]
 
-        self.neg_thres = neg_thres
         # self.discriminator = discriminator
         self.if_x = if_x
         self.neg_num = neg_num
