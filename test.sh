@@ -3,15 +3,16 @@
 [ -f path.sh ] && . ./path.sh
 
 if [ $# != 3 ] ; then 
-  echo "usage: test.sh <CUDA_DEVICE> <num of paired> <unit_type>"
-  echo "e.g. test.sh 0 -1 char"
+  echo "usage: test.sh <CUDA_DEVICE> <num of all_utts> <num of paired> <unit_type>"
+  echo "e.g. test.sh 0 -1 -1 char"
   exit 1
 fi
 
 #RNN_module=$1
 device_id=$1
-num_paired=$2
-unit_type=$3
+num_all_utts=$2
+num_paired=$3
+unit_type=$4
 
 init_lr=0.0001
 batch_size=16
@@ -41,9 +42,9 @@ top_NN=100
 width=30
 weight_LM=0.01
 
-model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
-log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
-result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_all_utts}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_all_utts}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_all_utts}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
 
 train_meta_pkl=$feat_dir/processed/timit-train-meta.pkl       # {'prefix': [4620 x drID_spkID_uttID]}
 train_mfcc_pkl=$feat_dir/processed/timit-train-mfcc-nor.pkl   # [4620 x num_of_frames x 39]
@@ -76,4 +77,4 @@ python3 $path/main.py --init_lr=$init_lr --batch_size=$batch_size --seq_len=$seq
   --top_NN=$top_NN --width=$width --weight_LM=$weight_LM --n_epochs=$n_epochs \
   $train_meta_pkl $train_mfcc_pkl $train_phn_pkl $train_wrd_pkl $train_slb_pkl \
   $test_meta_pkl $test_mfcc_pkl $test_phn_pkl $test_wrd_pkl $test_slb_pkl \
-  $log_dir $model_dir $result_dir $mode -1 $unit_type
+  $log_dir $model_dir $result_dir $mode -1 -1 $unit_type

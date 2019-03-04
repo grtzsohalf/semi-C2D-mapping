@@ -2,17 +2,18 @@
 
 [ -f path.sh ] && . ./path.sh
 
-if [ $# != 4 ] ; then 
-  echo "usage: train.sh <CUDA_DEVICE> <num of paired> <n_epochs for training> <unit_type>"
-  echo "e.g. train.sh 0 1000 300 char"
+if [ $# != 5 ] ; then 
+  echo "usage: train.sh <CUDA_DEVICE> <num of all_utts> <num of paired> <n_epochs for training> <unit_type>"
+  echo "e.g. train.sh 0 -1 -1 300 char"
   exit 1
 fi
 
 #RNN_module=$1
 device_id=$1
-num_paired=$2
-n_epochs=$3
-unit_type=$4
+num_all_utts=$2
+num_paired=$3
+n_epochs=$4
+unit_type=$5
 
 init_lr=0.0001
 batch_size=32
@@ -27,7 +28,7 @@ dropout_rate=0.3
 neg_num=1
 
 weight_in_r=0.2
-weight_cr_r=0.
+weight_cr_r=0.2
 weight_in_txt_ce=1.
 weight_cr_txt_ce=1.
 weight_x=0.
@@ -44,9 +45,9 @@ weight_LM=0.01
 
 mkdir -p $exp_dir
 
-model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
-log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
-result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+model_dir=$exp_dir/model_${unit_type}_${init_lr}_${num_all_utts}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+log_dir=$exp_dir/log_${unit_type}_${init_lr}_${num_all_utts}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
+result_dir=$exp_dir/result_${unit_type}_${init_lr}_${num_all_utts}_${num_paired}_${hidden_dim}_${enc_num_layers}_${dec_num_layers}_${dropout_rate}_${weight_in_r}_${weight_cr_r}_${weight_in_txt_ce}_${weight_cr_txt_ce}_${weight_x}_${weight_pos_paired}_${weight_neg_paired}_${neg_num}
 
 mkdir -p $model_dir
 mkdir -p $log_dir
@@ -82,4 +83,4 @@ python3 $path/main.py --init_lr=$init_lr --batch_size=$batch_size --seq_len=$seq
   --top_NN=$top_NN --width=$width --weight_LM=$weight_LM --n_epochs=$n_epochs \
   $train_meta_pkl $train_mfcc_pkl $train_phn_pkl $train_wrd_pkl $train_slb_pkl \
   $test_meta_pkl $test_mfcc_pkl $test_phn_pkl $test_wrd_pkl $test_slb_pkl \
-  $log_dir $model_dir $result_dir $mode $num_paired $unit_type
+  $log_dir $model_dir $result_dir $mode $num_all_utts $num_paired $unit_type

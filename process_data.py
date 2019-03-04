@@ -28,9 +28,10 @@ sil_token = 0 # 'h#'
 
 
 class Speech:
-    def __init__(self, name, batch_size, num_paired):
+    def __init__(self, name, batch_size, num_all_utts, num_paired):
         self.name = name
         self.batch_size = batch_size
+        self.num_all_utts = num_all_utts
         self.num_paired = num_paired
 
         self.n_utts = 0
@@ -130,11 +131,18 @@ class Speech:
         return f
 
     def process_data(self, meta_file, feat_file, phn_file, wrd_file, slb_file):
-        meta_data = read_pkl(meta_file)     # {'prefix': [num_of_utts x drID_spkID_uttID]}                      
-        feat = read_pkl(feat_file)          # [num_of_utts x num_of_frames x feat_dim]                                
-        phn_data = read_pkl(phn_file)       # [num_of_utts x num_of_phns x [phn, start, end]] ** include 'h#' **
-        wrd_data = read_pkl(wrd_file)       # [num_of_utts x num_of_wrds x [wrd, start, end]]           
-        # slb_data = read_pkl(slb_file)       # [num_of_utts x num_of_slbs x [slb, start, end]]           
+        if self.num_all_utts == -1:
+            meta_data = read_pkl(meta_file)['prefix']     # {'prefix': [num_of_utts x drID_spkID_uttID]}                      
+            feat = read_pkl(feat_file)          # [num_of_utts x num_of_frames x feat_dim]                                
+            phn_data = read_pkl(phn_file)       # [num_of_utts x num_of_phns x [phn, start, end]] ** include 'h#' **
+            wrd_data = read_pkl(wrd_file)       # [num_of_utts x num_of_wrds x [wrd, start, end]]           
+            # slb_data = read_pkl(slb_file)       # [num_of_utts x num_of_slbs x [slb, start, end]]           
+        else:
+            meta_data = read_pkl(meta_file)['prefix'][:self.num_all_utts]     # {'prefix': [num_of_utts x drID_spkID_uttID]}     
+            feat = read_pkl(feat_file)[:self.num_all_utts]          # [num_of_utts x num_of_frames x feat_dim]                                
+            phn_data = read_pkl(phn_file)[:self.num_all_utts]       # [num_of_utts x num_of_phns x [phn, start, end]] ** include 'h#' **
+            wrd_data = read_pkl(wrd_file)[:self.num_all_utts]       # [num_of_utts x num_of_wrds x [wrd, start, end]]           
+            # slb_data = read_pkl(slb_file)[:self.num_all_utts]       # [num_of_utts x num_of_slbs x [slb, start, end]]           
 
         phn_wrd_data = self.make_phn_wrd(phn_data, wrd_data)
 
@@ -151,7 +159,7 @@ class Speech:
             self.phn_meta.append(phn_meta_utt)
 
         for i, (utt, feat_utt, wrd_utt, phn_wrd_utt) \
-                in enumerate(zip(meta_data['prefix'], feat, wrd_data, phn_wrd_data)):
+                in enumerate(zip(meta_data, feat, wrd_data, phn_wrd_data)):
             spk = utt.split('_')[1]
 
             if not spk in self.spk2utt_idx:

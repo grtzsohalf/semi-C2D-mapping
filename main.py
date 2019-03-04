@@ -155,6 +155,8 @@ def add_parser():
         metavar='<result directory>')
     parser.add_argument('mode', 
         metavar='<mode (train or test)>')    
+    parser.add_argument('num_all_utts', type=int, default=-1,
+        metavar='<number of all data utts>')    
     parser.add_argument('num_paired', type=int, default=-1,
         metavar='<number of paired data>')    
     parser.add_argument('unit_type',
@@ -179,14 +181,14 @@ if __name__ == '__main__':
     #
     
     if FLAG.mode == 'train':
-        train_data = Speech('train', FLAG.batch_size, FLAG.num_paired)
+        train_data = Speech('train', FLAG.batch_size, FLAG.num_all_utts, FLAG.num_paired)
         train_data.process_data(FLAG.train_meta, FLAG.train_mfcc, FLAG.train_phn, FLAG.train_wrd, FLAG.train_slb)
-        test_data = Speech('test', FLAG.batch_size, FLAG.num_paired)
+        test_data = Speech('test', FLAG.batch_size, -1, -1)
         test_data.process_data(FLAG.test_meta, FLAG.test_mfcc, FLAG.test_phn, FLAG.test_wrd, FLAG.test_slb)
     else:
-        test_data = Speech('test', FLAG.batch_size, FLAG.num_paired)
+        test_data = Speech('test', FLAG.batch_size, -1, -1)
         test_data.process_data(FLAG.test_meta, FLAG.test_mfcc, FLAG.test_phn, FLAG.test_wrd, FLAG.test_slb)
-        train_data = Speech('train', FLAG.batch_size, FLAG.num_paired)
+        train_data = Speech('train', FLAG.batch_size, -1, -1)
         train_data.process_data(FLAG.train_meta, FLAG.train_mfcc, FLAG.train_phn, FLAG.train_wrd, FLAG.train_slb)
     print ("Data processed!")
 
